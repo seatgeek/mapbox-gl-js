@@ -379,9 +379,9 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
     // @TODO: needs a layout mode, e.g. layout['text-placement-priority'] === 'center'
     // When layout['text-unique'] is enabled remember previously placed
     // instances to prioritize their placement.
-    var placedTime = +new Date;
-    var throttle = 1000;
+
     this.byText = this.byText || {};
+    var throttled = false;
     if (layout['text-unique'] && center) {
         var byText = this.byText;
         var angle = ((collisionTile.angle - (Math.PI*0.5))*-1) % Math.PI;
@@ -395,13 +395,39 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
         var cm = (c2.x*c1.y)-(c2.y*c1.x);
         var cn = Math.sqrt(Math.pow(c2.y-c1.y,2)+Math.pow(c2.x-c1.x,2));
         this.symbolInstances.sort(function(a, b) {
-            var distA = Math.abs(cy*a.x - cx*a.y + cm)/cy;
-            var distB = Math.abs(cy*b.x - cx*b.y + cm)/cy;
-            if (byText[a.text] === a && a.placedTime && placedTime - a.placedTime < throttle) distA -= 4096;
-            if (byText[b.text] === b && b.placedTime && placedTime - b.placedTime < throttle) distB -= 4096;
+            var distA = Math.abs(cy*a.x - cx*a.y + cm)/cn;
+            var distB = Math.abs(cy*b.x - cx*b.y + cm)/cn;
+            if (byText[a.text] === a) {
+                var angleA = a.placedAngle ? Math.abs(collisionTile.angle-a.placedAngle) : Infinity;
+                // throttle turns
+                if (angleA > Math.PI*0.005) {
+                    distA -= 4096;
+                    throttled = true;
+                // stabilize shakycam
+                } else if (angleA <= Math.PI*0.005) {
+                    distA -= 1024;
+                } else {
+                    delete a.placedAngle;
+                }
+            }
+            if (byText[b.text] === b) {
+                var angleB = b.placedAngle ? Math.abs(collisionTile.angle-b.placedAngle) : Infinity;
+                // throttle turns
+                if (angleB > Math.PI*0.005) {
+                    distB -= 4096;
+                    throttled = true;
+                // stabilize shakycam
+                } else if (angleB <= Math.PI*0.005) {
+                    distB -= 1024;
+                } else {
+                    delete b.placedAngle;
+                }
+            }
             return distA - distB;
         });
     }
+
+    if (throttled) console.log('Throttled');
 
     this.byText = {};
     for (var p = 0; p < this.symbolInstances.length; p++) {
@@ -461,7 +487,7 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
                 this.addSymbols('glyph', symbolInstance.glyphQuads, glyphScale, layout['text-keep-upright'], textAlongLine, collisionTile.angle);
                 if (layout['text-unique']) {
                     this.byText[symbolInstance.text] = symbolInstance;
-                    symbolInstance.placedTime = placedTime;
+                    symbolInstance.placedAngle = symbolInstance.placedAngle || collisionTile.angle;
                 }
             }
         }
