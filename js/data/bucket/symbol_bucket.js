@@ -380,9 +380,12 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
     // When layout['text-unique'] is enabled remember previously placed
     // instances to prioritize their placement.
     var placedTime = +new Date;
+    var throttle = 1000;
     this.byText = this.byText || {};
     if (layout['text-unique'] && center) {
-        var angle = (collisionTile.angle - (Math.PI*0.5))*-1;
+        var byText = this.byText;
+        var angle = ((collisionTile.angle - (Math.PI*0.5))*-1) % Math.PI;
+        while (angle < 0) angle += Math.PI;
         var sin = Math.sin(angle);
         var cos = Math.cos(angle);
         var c1 = center;
@@ -394,10 +397,13 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
         this.symbolInstances.sort(function(a, b) {
             var distA = Math.abs(cy*a.x - cx*a.y + cm)/cy;
             var distB = Math.abs(cy*b.x - cx*b.y + cm)/cy;
+            if (byText[a.text] === a && a.placedTime && placedTime - a.placedTime < throttle) distA -= 4096;
+            if (byText[b.text] === b && b.placedTime && placedTime - b.placedTime < throttle) distB -= 4096;
             return distA - distB;
         });
     }
 
+    this.byText = {};
     for (var p = 0; p < this.symbolInstances.length; p++) {
         var symbolInstance = this.symbolInstances[p];
         var hasText = symbolInstance.hasText;
@@ -406,16 +412,9 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
         var iconWithoutText = layout['text-optional'] || !hasText,
             textWithoutIcon = layout['icon-optional'] || !hasIcon;
 
-        // Unique text handling.
-        if (hasText && this.byText[symbolInstance.text]) {
-            // Invalidate previously placed unique symbol.
-            if (placedTime - this.byText[symbolInstance.text].placedTime >= 500) {
-                delete this.byText[symbolInstance.text];
-            }
-            // Skip placing this feature.
-            if (symbolInstance !== this.byText[symbolInstance.text] && !iconWithoutText) {
-                continue;
-            }
+        // Skip placing this feature by text uniqueness.
+        if (hasText && this.byText[symbolInstance.text] && !iconWithoutText) {
+            continue;
         }
 
         // Calculate angle of line to camera and skip if it exceeds 45 degree range
@@ -455,7 +454,7 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
 
 
         // Insert final placement into collision tree and add glyphs/icons to buffers
-        if (hasText && symbolInstance !== this.byText[symbolInstance.text]) {
+        if (hasText) {
             if (glyphScale > 1) continue;
             collisionTile.insertCollisionFeature(symbolInstance.textCollisionFeature, glyphScale, layout['text-ignore-placement']);
             if (glyphScale <= maxScale) {
