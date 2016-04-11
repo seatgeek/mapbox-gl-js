@@ -25,9 +25,9 @@ function getAnchors(line, spacing, maxAngle, shapedText, shapedIcon, glyphSize, 
 
     // Is the label long, relative to the spacing?
     // If so, adjust the spacing so there is always a minimum space of `spacing / 4` between label edges.
-    if (spacing - labelLength * boxScale  < spacing / 4) {
-        spacing = labelLength * boxScale + spacing / 4;
-    }
+//    if (spacing - labelLength * boxScale  < spacing / 4) {
+//        spacing = labelLength * boxScale + spacing / 4;
+//    }
 
     // Offset the first anchor by:
     // Either half the label length plus a fixed extra offset if the line is not continued
