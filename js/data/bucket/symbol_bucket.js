@@ -382,6 +382,8 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
 
     this.byText = this.byText || {};
     var throttled = false;
+    var bonusThrottle = -4192;
+    var bonusStabilizer = -1024;
     if (layout['text-unique'] && center) {
         var byText = this.byText;
         var angle = ((collisionTile.angle - (Math.PI*0.5))*-1) % Math.PI;
@@ -400,12 +402,12 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
             if (byText[a.text] === a) {
                 var angleA = a.placedAngle ? Math.abs(collisionTile.angle-a.placedAngle) : Infinity;
                 // throttle turns
-                if (angleA > Math.PI*0.005) {
-                    distA -= 4096;
+                if (angleA > Math.PI*0.10) {
+                    distA += bonusThrottle;
                     throttled = true;
                 // stabilize shakycam
-                } else if (angleA <= Math.PI*0.005) {
-                    distA -= 1024;
+                } else if (angleA <= Math.PI*0.02) {
+                    distA += bonusStabilizer;
                 } else {
                     delete a.placedAngle;
                 }
@@ -413,12 +415,12 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
             if (byText[b.text] === b) {
                 var angleB = b.placedAngle ? Math.abs(collisionTile.angle-b.placedAngle) : Infinity;
                 // throttle turns
-                if (angleB > Math.PI*0.005) {
-                    distB -= 4096;
+                if (angleB > Math.PI*0.10) {
+                    distB += bonusThrottle;
                     throttled = true;
                 // stabilize shakycam
-                } else if (angleB <= Math.PI*0.005) {
-                    distB -= 1024;
+                } else if (angleB <= Math.PI*0.02) {
+                    distB += bonusStabilizer;
                 } else {
                     delete b.placedAngle;
                 }
