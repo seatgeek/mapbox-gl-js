@@ -14,6 +14,7 @@ var clipLine = require('../../symbol/clip_line');
 var util = require('../../util/util');
 var loadGeometry = require('../load_geometry');
 var CollisionFeature = require('../../symbol/collision_feature');
+var lineIntersectsBufferedLine = require('../../util/intersection_tests').lineIntersectsBufferedLine;
 
 var shapeText = Shaping.shapeText;
 var shapeIcon = Shaping.shapeIcon;
@@ -382,7 +383,8 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
 
     this.byText = this.byText || {};
     var throttled = false;
-    var bonusThrottle = -4192;
+    var lineOfSight = false;
+    var bonusThrottle = -8096;
     var bonusStabilizer = -1024;
     if (layout['text-unique'] && center) {
         var byText = this.byText;
@@ -390,8 +392,11 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
         while (angle < 0) angle += Math.PI;
         var sin = Math.sin(angle);
         var cos = Math.cos(angle);
-        var c1 = center;
-        var c2 = { x: center.x + cos*200, y: center.y + sin*200 };
+        var c1 = new Point(center.x - cos*1e5, center.y - sin*1e5);
+        var c2 = new Point(center.x + cos*1e5, center.y + sin*1e5);
+        lineOfSight = [c1,c2];
+
+        // Precomputed variables for calculating distance from a line
         var cx = c2.x-c1.x;
         var cy = c2.y-c1.y;
         var cm = (c2.x*c1.y)-(c2.y*c1.x);
@@ -412,6 +417,7 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
                     delete a.placedAngle;
                 }
             }
+            a.dist = distA;
             if (byText[b.text] === b) {
                 var angleB = b.placedAngle ? Math.abs(collisionTile.angle-b.placedAngle) : Infinity;
                 // throttle turns
@@ -425,6 +431,7 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
                     delete b.placedAngle;
                 }
             }
+            b.dist = distB;
             return distA - distB;
         });
     }
@@ -447,14 +454,27 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
 
         // Calculate angle of line to camera and skip if it exceeds 45 degree range
         // @TODO determine layout property for specifying this
+        var angleRange = 45;
         var cameraToLineAngle = (collisionTile.angle + symbolInstance.angle + (Math.PI*0.5)) % (Math.PI*2);
         while (cameraToLineAngle < 0) cameraToLineAngle += Math.PI*2;
         if (layout['text-unique'] && (
-            cameraToLineAngle < (45/180*Math.PI) ||
-            cameraToLineAngle > (315/180*Math.PI) ||
-            (cameraToLineAngle > (135/180*Math.PI) && cameraToLineAngle < (225/180*Math.PI))
+            cameraToLineAngle < (angleRange/180*Math.PI) ||
+            cameraToLineAngle > ((360-angleRange)/180*Math.PI) ||
+            (cameraToLineAngle > ((180-angleRange)/180*Math.PI) && cameraToLineAngle < ((180+angleRange)/180*Math.PI))
         )) {
             continue;
+        }
+
+        // When in guidance mode, disallow labels
+        // - that are further from the line of sight than 1024 units
+        // - whose line segment geometry does not intersect with the line of sight (buffered)
+        if (layout['text-unique'] && lineOfSight) {
+            if (symbolInstance.dist > 1024) continue;
+            if (symbolInstance.line[0].dist(symbolInstance) < 1024 || symbolInstance.line[symbolInstance.line.length-1].dist(symbolInstance) < 1024) {
+                if (!lineIntersectsBufferedLine(symbolInstance.line, lineOfSight, 0)) continue;
+            } else {
+                if (!lineIntersectsBufferedLine(symbolInstance.line, lineOfSight, 256)) continue;
+            }
         }
 
         // Calculate the scales at which the text and icon can be placed without collision.
@@ -625,6 +645,7 @@ function SymbolInstance(anchor, line, shapedText, shapedIcon, layout, addToBuffe
     this.hasIcon = !!shapedIcon;
     this.text = (shapedText && shapedText.text) || '';
     this.angle = anchor.angle;
+    this.line = line;
 
     if (this.hasText) {
         this.glyphQuads = addToBuffers ? getGlyphQuads(anchor, shapedText, textBoxScale, line, layout, textAlongLine) : [];

@@ -3,7 +3,8 @@
 module.exports = {
     multiPolygonIntersectsBufferedMultiPoint: multiPolygonIntersectsBufferedMultiPoint,
     multiPolygonIntersectsMultiPolygon: multiPolygonIntersectsMultiPolygon,
-    multiPolygonIntersectsBufferedMultiLine: multiPolygonIntersectsBufferedMultiLine
+    multiPolygonIntersectsBufferedMultiLine: multiPolygonIntersectsBufferedMultiLine,
+    lineIntersectsBufferedLine: lineIntersectsBufferedLine
 };
 
 function multiPolygonIntersectsBufferedMultiPoint(multiPolygon, rings, radius) {
