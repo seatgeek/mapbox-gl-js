@@ -431,34 +431,10 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
             continue;
         }
 
-        // Calculate angle of line to camera and skip if it exceeds 45 degree range
-        // @TODO determine layout property for specifying this
-        if (layout['text-unique'] && (+new Date - (symbolInstance.forcePlacement||0)) > 1000) {
-            var angleRange = 45;
-            var cameraToLineAngle = (collisionTile.angle + symbolInstance.angle + (Math.PI*0.5)) % (Math.PI*2);
-            while (cameraToLineAngle < 0) cameraToLineAngle += Math.PI*2;
-            if ((
-                cameraToLineAngle < (angleRange/180*Math.PI) ||
-                cameraToLineAngle > ((360-angleRange)/180*Math.PI) ||
-                (cameraToLineAngle > ((180-angleRange)/180*Math.PI) && cameraToLineAngle < ((180+angleRange)/180*Math.PI))
-            )) {
-                continue;
-            }
-
-            // When in guidance mode, disallow labels
-            // - that are further from the line of sight than 1024 units
-            // - whose line segment geometry does not intersect with the line of sight (buffered)
-            if (lineOfSight) {
-                // If the line starts or ends close to a tile boundary require it to
-                // intersect exactly with the line of sight.
-                if (symbolInstance.line[0].dist(symbolInstance) < 1024 || symbolInstance.line[symbolInstance.line.length-1].dist(symbolInstance) < 1024) {
-                    if (!lineIntersectsBufferedLine(symbolInstance.line, lineOfSight, 0)) continue;
-                } else {
-                    if (!lineIntersectsBufferedLine(symbolInstance.line, lineOfSight, 1024)) continue;
-                }
-            }
-            // Hard stop from centerline.
-            if (symbolInstance.dist > 2048) continue;
+        // Filter placement when in guidance mode.
+        // @TODO determine layout property for specifying this.
+        if (layout['text-unique'] && !allowGuidancePlacement(lineOfSight, collisionTile, symbolInstance)) {
+            continue;
         }
 
         // Calculate the scales at which the text and icon can be placed without collision.
@@ -510,6 +486,55 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
 
     if (showCollisionBoxes) this.addToDebugBuffers(collisionTile);
 };
+
+function allowGuidancePlacement(lineOfSight, collisionTile, symbolInstance) {
+    // Passthrough for forced placement.
+    if ((+new Date - (symbolInstance.forcePlacement||0)) < 1000) return true;
+
+    // Calculate angle of line to camera and skip if it exceeds 45 degree range
+    var angleRange = 45;
+    var cameraToLineAngle = (collisionTile.angle + symbolInstance.angle + (Math.PI*0.5)) % (Math.PI*2);
+    while (cameraToLineAngle < 0) cameraToLineAngle += Math.PI*2;
+    if (
+        cameraToLineAngle < (angleRange/180*Math.PI) ||
+        cameraToLineAngle > ((360-angleRange)/180*Math.PI) ||
+        (cameraToLineAngle > ((180-angleRange)/180*Math.PI) && cameraToLineAngle < ((180+angleRange)/180*Math.PI))
+    ) return false;
+
+    // Hard stop from centerline
+    if (symbolInstance.dist > 2048) return false;
+
+    // When in guidance mode, disallow labels
+    // - that are further from the line of sight than 1024 units
+    // - whose line segment geometry does not intersect with the line of sight (buffered)
+    if (lineOfSight) {
+        // Line crosses LOS in the interior of the tile.
+        if (lineIntersectsBufferedLine(symbolInstance.line, lineOfSight, 0)) return true;
+
+        // The line start meets/crosses the tile extent toward LOS.
+        // Only label the line if the anchor is far enough from the tile edge.
+        var start = symbolInstance.line[0];
+        var end = symbolInstance.line[symbolInstance.line.length-1];
+        var lineAtExtent = (
+            (start.x <= 0 || start.x >= EXTENT || start.y <= 0 || start.y >= EXTENT) &&
+            lineIntersectsBufferedLine([start], lineOfSight, 1024) &&
+            start
+        ) || (
+            (end.x <= 0 || end.x >= EXTENT || end.y <= 0 || end.y >= EXTENT) &&
+            lineIntersectsBufferedLine([end], lineOfSight, 1024) &&
+            end
+        );
+        if (lineAtExtent && lineAtExtent.dist(symbolInstance) < 2048) return false;
+
+        // Line crosses LOS in the interior of the tile.
+        if (lineIntersectsBufferedLine(symbolInstance.line, lineOfSight, 1024)) return true;
+
+        // Don't label in all other cases.
+        return false;
+    } else {
+        return true;
+    }
+}
 
 SymbolBucket.prototype.addSymbols = function(programName, quads, scale, keepUpright, alongLine, placementAngle) {
 
