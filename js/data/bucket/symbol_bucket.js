@@ -382,10 +382,7 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
     // instances to prioritize their placement.
 
     this.byText = this.byText || {};
-    var throttled = false;
     var lineOfSight = false;
-    var bonusThrottle = -8096;
-    var bonusStabilizer = -1024;
     if (layout['text-unique'] && center) {
         var byText = this.byText;
         var angle = ((collisionTile.angle - (Math.PI*0.5))*-1) % Math.PI;
@@ -401,42 +398,24 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
         var cy = c2.y-c1.y;
         var cm = (c2.x*c1.y)-(c2.y*c1.x);
         var cn = Math.sqrt(Math.pow(c2.y-c1.y,2)+Math.pow(c2.x-c1.x,2));
-        this.symbolInstances.sort(function(a, b) {
-            var distA = Math.abs(cy*a.x - cx*a.y + cm)/cn;
-            var distB = Math.abs(cy*b.x - cx*b.y + cm)/cn;
-            if (byText[a.text] === a) {
-                var angleA = a.placedAngle ? Math.abs(collisionTile.angle-a.placedAngle) : Infinity;
-                // throttle turns
-                if (angleA > Math.PI*0.10) {
-                    distA += bonusThrottle;
-                    throttled = true;
+        for (var i = 0; i < this.symbolInstances.length; i++) {
+            var instance = this.symbolInstances[i];
+            instance.dist =
+            instance.sort = Math.abs(cy*instance.x - cx*instance.y + cm)/cn;
+            if (byText[instance.text] === instance) {
+                var angle = instance.placedAngle ? Math.abs(collisionTile.angle-instance.placedAngle) : Infinity;
                 // stabilize shakycam
-                } else if (angleA <= Math.PI*0.02) {
-                    distA += bonusStabilizer;
-                } else {
-                    delete a.placedAngle;
+                if (angle <= 1e-5) {
+                    instance.sort -= 512;
+                    instance.forcePlacement = false;
+                } else if (angle > 1e-5) {
+                    instance.sort = -Infinity;
+                    instance.forcePlacement = instance.forcePlacement || +new Date;
                 }
             }
-            a.dist = distA;
-            if (byText[b.text] === b) {
-                var angleB = b.placedAngle ? Math.abs(collisionTile.angle-b.placedAngle) : Infinity;
-                // throttle turns
-                if (angleB > Math.PI*0.10) {
-                    distB += bonusThrottle;
-                    throttled = true;
-                // stabilize shakycam
-                } else if (angleB <= Math.PI*0.02) {
-                    distB += bonusStabilizer;
-                } else {
-                    delete b.placedAngle;
-                }
-            }
-            b.dist = distB;
-            return distA - distB;
-        });
+        }
+        this.symbolInstances.sort(function(a, b) { return a.sort - b.sort; });
     }
-
-    if (throttled) console.log('Throttled');
 
     this.byText = {};
     for (var p = 0; p < this.symbolInstances.length; p++) {
@@ -454,27 +433,32 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
 
         // Calculate angle of line to camera and skip if it exceeds 45 degree range
         // @TODO determine layout property for specifying this
-        var angleRange = 45;
-        var cameraToLineAngle = (collisionTile.angle + symbolInstance.angle + (Math.PI*0.5)) % (Math.PI*2);
-        while (cameraToLineAngle < 0) cameraToLineAngle += Math.PI*2;
-        if (layout['text-unique'] && (
-            cameraToLineAngle < (angleRange/180*Math.PI) ||
-            cameraToLineAngle > ((360-angleRange)/180*Math.PI) ||
-            (cameraToLineAngle > ((180-angleRange)/180*Math.PI) && cameraToLineAngle < ((180+angleRange)/180*Math.PI))
-        )) {
-            continue;
-        }
-
-        // When in guidance mode, disallow labels
-        // - that are further from the line of sight than 1024 units
-        // - whose line segment geometry does not intersect with the line of sight (buffered)
-        if (layout['text-unique'] && lineOfSight) {
-            if (symbolInstance.dist > 1024) continue;
-            if (symbolInstance.line[0].dist(symbolInstance) < 1024 || symbolInstance.line[symbolInstance.line.length-1].dist(symbolInstance) < 1024) {
-                if (!lineIntersectsBufferedLine(symbolInstance.line, lineOfSight, 0)) continue;
-            } else {
-                if (!lineIntersectsBufferedLine(symbolInstance.line, lineOfSight, 256)) continue;
+        if (layout['text-unique'] && (+new Date - (symbolInstance.forcePlacement||0)) > 1000) {
+            var angleRange = 45;
+            var cameraToLineAngle = (collisionTile.angle + symbolInstance.angle + (Math.PI*0.5)) % (Math.PI*2);
+            while (cameraToLineAngle < 0) cameraToLineAngle += Math.PI*2;
+            if ((
+                cameraToLineAngle < (angleRange/180*Math.PI) ||
+                cameraToLineAngle > ((360-angleRange)/180*Math.PI) ||
+                (cameraToLineAngle > ((180-angleRange)/180*Math.PI) && cameraToLineAngle < ((180+angleRange)/180*Math.PI))
+            )) {
+                continue;
             }
+
+            // When in guidance mode, disallow labels
+            // - that are further from the line of sight than 1024 units
+            // - whose line segment geometry does not intersect with the line of sight (buffered)
+            if (lineOfSight) {
+                // If the line starts or ends close to a tile boundary require it to
+                // intersect exactly with the line of sight.
+                if (symbolInstance.line[0].dist(symbolInstance) < 1024 || symbolInstance.line[symbolInstance.line.length-1].dist(symbolInstance) < 1024) {
+                    if (!lineIntersectsBufferedLine(symbolInstance.line, lineOfSight, 0)) continue;
+                } else {
+                    if (!lineIntersectsBufferedLine(symbolInstance.line, lineOfSight, 1024)) continue;
+                }
+            }
+            // Hard stop from centerline.
+            if (symbolInstance.dist > 2048) continue;
         }
 
         // Calculate the scales at which the text and icon can be placed without collision.
@@ -509,7 +493,7 @@ SymbolBucket.prototype.placeFeatures = function(collisionTile, showCollisionBoxe
                 this.addSymbols('glyph', symbolInstance.glyphQuads, glyphScale, layout['text-keep-upright'], textAlongLine, collisionTile.angle);
                 if (layout['text-unique']) {
                     this.byText[symbolInstance.text] = symbolInstance;
-                    symbolInstance.placedAngle = symbolInstance.placedAngle || collisionTile.angle;
+                    symbolInstance.placedAngle = collisionTile.angle;
                 }
             }
         }
