@@ -109,10 +109,9 @@ var Map = module.exports = function(options) {
 
     this.on('move', this._update.bind(this, false));
     this.on('zoom', this._update.bind(this, true));
-    this.on('moveend', function() {
-        this.animationLoop.set(300); // text fading
-        this._rerender();
-    }.bind(this));
+    this.on('moveend', this._onMoveend.bind(this));
+    this.on('data', this._onData.bind(this));
+
 
     if (typeof window !== 'undefined') {
         window.addEventListener('resize', this._onWindowResize, false);
@@ -847,9 +846,22 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
 
         this.fire('render');
 
-        if (this.isDataStable() && !this._loaded) {
-            this._loaded = true;
-            this.fire('load');
+        if (this._willFireData) {
+            this.fire('data');
+        }
+
+        if (this.isDataStable()) {
+            if (!this._wasLoaded) {
+                this._wasLoaded = true;
+                this.fire('load');
+            }
+
+            if (!this._wasDataStable) {
+                this._wasDataStable = true;
+                this.fire('dataend');
+            }
+        } else {
+            this._wasDataStable = false;
         }
 
         this._frameId = null;
@@ -906,6 +918,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     },
 
     _forwardStyleEvent: function(e) {
+        if (e.type === 'load' || e.type === 'change') this._willFireData = true;
         this.fire('style.' + e.type, util.extend({style: e.target}, e));
     },
 
@@ -918,6 +931,9 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     },
 
     _forwardTileEvent: function(e) {
+        if (e.type === 'load' || e.type === 'add' || e.type === 'remove') {
+            this._willFireData = true;
+        }
         this.fire(e.type, util.extend({style: e.target}, e));
     },
 
@@ -939,6 +955,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         if (source.onAdd)
             source.onAdd(this);
         this._forwardSourceEvent(e);
+        this._willFireData = true;
     },
 
     _onSourceRemove: function(e) {
@@ -946,15 +963,26 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         if (source.onRemove)
             source.onRemove(this);
         this._forwardSourceEvent(e);
+        this._willFireData = true;
     },
 
     _onSourceUpdate: function(e) {
         this._update();
         this._forwardSourceEvent(e);
+        this._willFireData = true;
     },
 
     _onWindowResize: function() {
         this.stop().resize()._update();
+    },
+
+    _onMoveend: function() {
+        this.animationLoop.set(300); // text fading
+        this._rerender();
+    },
+
+    _onData: function() {
+        this._wasDataStable = false;
     }
 });
 
