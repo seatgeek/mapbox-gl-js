@@ -110,7 +110,7 @@ ImageSource.prototype = util.inherit(Evented, /** @lends ImageSource.prototype *
         return this;
     },
 
-    loaded: function() {
+    isDataStable: function() {
         return this.image && this.image.complete;
     },
 
@@ -123,7 +123,7 @@ ImageSource.prototype = util.inherit(Evented, /** @lends ImageSource.prototype *
     },
 
     prepare: function() {
-        if (!this._loaded || !this.loaded()) return;
+        if (!this._loaded || !this.isDataStable()) return;
 
         var painter = this.map.painter;
         var gl = painter.gl;

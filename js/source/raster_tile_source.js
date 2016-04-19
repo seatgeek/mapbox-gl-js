@@ -25,8 +25,8 @@ RasterTileSource.prototype = util.inherit(Evented, {
         this.map = map;
     },
 
-    loaded: function() {
-        return this._pyramid && this._pyramid.loaded();
+    isDataStable: function() {
+        return this._pyramid && this._pyramid.isDataStable();
     },
 
     update: function(transform) {

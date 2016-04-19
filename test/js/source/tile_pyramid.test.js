@@ -612,7 +612,7 @@ test('TilePyramid#loaded (no errors)', function (t) {
     var coord = new TileCoord(0, 0, 0);
     pyramid.addTile(coord);
 
-    t.ok(pyramid.loaded());
+    t.ok(pyramid.isDataStable());
     t.end();
 });
 
@@ -626,7 +626,7 @@ test('TilePyramid#loaded (with errors)', function (t) {
     var coord = new TileCoord(0, 0, 0);
     pyramid.addTile(coord);
 
-    t.ok(pyramid.loaded());
+    t.ok(pyramid.isDataStable());
     t.end();
 });
 

@@ -107,8 +107,8 @@ GeoJSONSource.prototype = util.inherit(Evented, /** @lends GeoJSONSource.prototy
         this.map = map;
     },
 
-    loaded: function() {
-        return this._loaded && this._pyramid.loaded();
+    isDataStable: function() {
+        return this._loaded && this._pyramid.isDataStable();
     },
 
     update: function(transform) {

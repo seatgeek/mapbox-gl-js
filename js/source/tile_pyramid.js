@@ -51,7 +51,7 @@ TilePyramid.prototype = {
      * @returns {boolean} whether all tiles are loaded.
      * @private
      */
-    loaded: function() {
+    isDataStable: function() {
         for (var t in this._tiles) {
             if (!this._tiles[t].loaded && !this._tiles[t].errored)
                 return false;

@@ -108,15 +108,15 @@ Style.prototype = util.inherit(Evented, {
         }
     },
 
-    loaded: function() {
+    isDataStable: function() {
         if (!this._loaded)
             return false;
 
         for (var id in this.sources)
-            if (!this.sources[id].loaded())
+            if (!this.sources[id].isDataStable())
                 return false;
 
-        if (this.sprite && !this.sprite.loaded())
+        if (this.sprite && !this.sprite.isDataStable())
             return false;
 
         return true;
@@ -692,7 +692,7 @@ Style.prototype = util.inherit(Evented, {
 
     'get sprite json': function(params, callback) {
         var sprite = this.sprite;
-        if (sprite.loaded()) {
+        if (sprite.isDataStable()) {
             callback(null, { sprite: sprite.data, retina: sprite.retina });
         } else {
             sprite.on('load', function() {
@@ -704,7 +704,7 @@ Style.prototype = util.inherit(Evented, {
     'get icons': function(params, callback) {
         var sprite = this.sprite;
         var spriteAtlas = this.spriteAtlas;
-        if (sprite.loaded()) {
+        if (sprite.isDataStable()) {
             spriteAtlas.setSprite(sprite);
             spriteAtlas.addIcons(params.icons, callback);
         } else {

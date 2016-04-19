@@ -793,18 +793,11 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
     },
 
     /**
-     * Is this map fully loaded? If the style isn't loaded
-     * or it has a change to the sources or style that isn't
-     * propagated to its style, return false.
-     *
-     * @returns {boolean} whether the map is loaded
+     * @returns {boolean} True if all the resources needed to display the
+     *   current viewport have been loaded.
      */
-    loaded: function() {
-        if (this._styleDirty || this._sourcesDirty)
-            return false;
-        if (!this.style || !this.style.loaded())
-            return false;
-        return true;
+    isDataStable: function() {
+        return (!this._styleDirty && !this.sourcesDirty && this.style && this.style.isDataStable());
     },
 
     /**
@@ -854,7 +847,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
 
         this.fire('render');
 
-        if (this.loaded() && !this._loaded) {
+        if (this.isDataStable() && !this._loaded) {
             this._loaded = true;
             this.fire('load');
         }

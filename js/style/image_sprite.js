@@ -70,7 +70,7 @@ function SpritePosition() {}
 SpritePosition.prototype = { x: 0, y: 0, width: 0, height: 0, pixelRatio: 1, sdf: false };
 
 ImageSprite.prototype.getSpritePosition = function(name) {
-    if (!this.loaded()) return new SpritePosition();
+    if (!this.isDataStable()) return new SpritePosition();
 
     var pos = this.data && this.data[name];
     if (pos && this.img) return pos;

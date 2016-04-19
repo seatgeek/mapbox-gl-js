@@ -101,7 +101,7 @@ function drawSymbol(painter, layer, posMatrix, tile, bucket, elementGroups, pref
 
     var text = prefix === 'text';
 
-    if (!text && !painter.style.sprite.loaded())
+    if (!text && !painter.style.sprite.isDataStable())
         return;
 
     gl.activeTexture(gl.TEXTURE0);

@@ -26,7 +26,7 @@ test('VectorTileSource', function(t) {
         });
 
         source.on('load', function() {
-            t.ok(source.loaded());
+            t.ok(source.isDataStable());
             t.deepEqual(source.tiles, ["http://example.com/{z}/{x}/{y}.png"]);
             t.deepEqual(source.minzoom, 1);
             t.deepEqual(source.maxzoom, 10);
@@ -45,7 +45,7 @@ test('VectorTileSource', function(t) {
         });
 
         source.on('load', function() {
-            t.ok(source.loaded());
+            t.ok(source.isDataStable());
             t.deepEqual(source.tiles, ["http://example.com/{z}/{x}/{y}.png"]);
             t.deepEqual(source.minzoom, 1);
             t.deepEqual(source.maxzoom, 10);

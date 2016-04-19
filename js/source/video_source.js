@@ -137,7 +137,7 @@ VideoSource.prototype = util.inherit(Evented, /** @lends VideoSource.prototype *
         return this;
     },
 
-    loaded: function() {
+    isDataStable: function() {
         return this.video && this.video.readyState >= 2;
     },
 
