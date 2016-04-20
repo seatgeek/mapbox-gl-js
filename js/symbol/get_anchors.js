@@ -46,7 +46,6 @@ function getAnchors(line, spacing, maxAngle, shapedText, shapedIcon, glyphSize, 
 
 function resample(line, offset, spacing, angleWindowSize, maxAngle, labelLength, isLineContinued, placeAtMiddle, tileExtent) {
 
-    console.log(line, offset, spacing, angleWindowSize, maxAngle, labelLength, isLineContinued, placeAtMiddle, tileExtent);
     var halfLabelLength = labelLength / 2;
     var lineLength = 0;
     for (var k = 0; k < line.length - 1; k++) {
