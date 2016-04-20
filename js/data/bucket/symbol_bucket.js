@@ -255,9 +255,9 @@ SymbolBucket.prototype.addFeature = function(lines, shapedText, shapedIcon, feat
         isLine = layout['symbol-placement'] === 'line',
         textRepeatDistance = symbolMinDistance / 2;
 
-    if (isLine) {
-        lines = clipLine(lines, 0, 0, EXTENT, EXTENT);
-    }
+    // if (isLine) {
+    //     lines = clipLine(lines, 0, 0, EXTENT, EXTENT);
+    // }
 
     for (var i = 0; i < lines.length; i++) {
         var line = lines[i];
