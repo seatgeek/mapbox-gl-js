@@ -48,26 +48,7 @@ function sameOrigin(url) {
     return a.protocol === document.location.protocol && a.host === document.location.host;
 }
 
-exports.getImage = function(url, callback, isRaster) {
-    // SUPERHACK: block tile loads outside of certain bounds
-    if (isRaster) {
-        var params = url.match(/(.*)\/(\d*)\/(\d*)\/(\d*)\.(.*)/i);
-        var z = params[2],
-            x = params[3],
-            y = params[4];
-
-        var base = 3.5;
-        var zoomOffset = z - 2;
-        var tilesMapCovers = Math.pow(2, zoomOffset - 1);
-        var minTile = Math.floor(zoomOffset * base);
-        var maxTile = Math.ceil(minTile + tilesMapCovers);
-        var isInBounds = z >= 3 && z <= 9 && x >= minTile && x <= maxTile && y >= minTile && y <= maxTile;
-
-        if (!isInBounds) {
-            return;
-        }
-    }
-
+exports.getImage = function(url, callback) {
     return exports.getArrayBuffer(url, function(err, imgData) {
         if (err) return callback(err);
         var img = new Image();
