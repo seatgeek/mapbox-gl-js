@@ -71,19 +71,6 @@ map.on('load', function() {
         }
     });
 
-    map.addSource('raster-tiles', {
-        type: 'raster',
-        tiles: ['http://buster-tileserver.service.seatgeek.stag:12100/mk/field_only/v8-15-37/{z}/{x}/{y}.png'],
-        tileSize: 128
-    });
-
-    map.addLayer({
-        id: 'field-tiles',
-        type: 'raster',
-        source: 'raster-tiles',
-        bounds: true
-    });
-
     var bufferTimes = {};
     map.on('tile.stats', function(bufferTimes) {
         var _stats = [];

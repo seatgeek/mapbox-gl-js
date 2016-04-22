@@ -396,9 +396,8 @@ Style.prototype = util.inherit(Evented, {
 
         if (!(layer instanceof StyleLayer)) {
             // this layer is not in the style.layers array, so we pass an impossible array index
-            // HACK: disable for now because this has an outside dependency
-            // if (this._handleErrors(validateStyle.layer,
-            //         'layers.' + layer.id, layer, false, {arrayIndex: -1})) return this;
+            if (this._handleErrors(validateStyle.layer,
+                    'layers.' + layer.id, layer, false, {arrayIndex: -1})) return this;
 
             var refLayer = layer.ref && this.getLayer(layer.ref);
             layer = StyleLayer.create(layer, refLayer);

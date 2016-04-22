@@ -37,7 +37,6 @@ StyleLayer.prototype = util.inherit(Evented, {
         this.type = (refLayer || layer).type;
         this.source = (refLayer || layer).source;
         this.sourceLayer = (refLayer || layer)['source-layer'];
-        this.bounds = (refLayer || layer).bounds; // [-Infinity, -Infinity, Infinity, Infinity];
         this.minzoom = (refLayer || layer).minzoom;
         this.maxzoom = (refLayer || layer).maxzoom;
         this.filter = (refLayer || layer).filter;
