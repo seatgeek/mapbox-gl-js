@@ -28,7 +28,6 @@ function drawRaster(painter, source, layer, coords) {
 }
 
 function drawRasterTile(painter, source, layer, coord) {
-
     var gl = painter.gl;
 
     gl.disable(gl.STENCIL_TEST);

@@ -53,7 +53,7 @@ RasterTileSource.prototype = util.inherit(Evented, {
     _loadTile: function(tile) {
         var url = normalizeURL(tile.coord.url(this.tiles), this.url, this.tileSize);
 
-        tile.request = ajax.getImage(url, done.bind(this));
+        tile.request = ajax.getImage(url, done.bind(this), true);
 
         function done(err, img) {
             delete tile.request;
