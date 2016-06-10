@@ -9,6 +9,8 @@ var GeoJSONFeature = require('../util/vectortile_to_geojson');
 var featureFilter = require('feature-filter');
 var CollisionTile = require('../symbol/collision_tile');
 var CollisionBoxArray = require('../symbol/collision_box');
+var SymbolInstancesArray = require('../symbol/symbol_instances');
+var SymbolQuadsArray = require('../symbol/symbol_quads');
 
 module.exports = Tile;
 
@@ -23,7 +25,7 @@ module.exports = Tile;
 function Tile(coord, size, sourceMaxZoom) {
     this.coord = coord;
     this.uid = util.uniqueId();
-    this.loaded = false; // TODO rename loaded
+    this.loaded = false;
     this.isUnloaded = false;
     this.uses = 0;
     this.tileSize = size;
@@ -50,6 +52,8 @@ Tile.prototype = {
 
         this.collisionBoxArray = new CollisionBoxArray(data.collisionBoxArray);
         this.collisionTile = new CollisionTile(data.collisionTile, this.collisionBoxArray);
+        this.symbolInstancesArray = new SymbolInstancesArray(data.symbolInstancesArray);
+        this.symbolQuadsArray = new SymbolQuadsArray(data.symbolQuadsArray);
         this.featureIndex = new FeatureIndex(data.featureIndex, data.rawTileData, this.collisionTile);
         this.rawTileData = data.rawTileData;
         this.buckets = unserializeBuckets(data.buckets, style);
@@ -97,6 +101,8 @@ Tile.prototype = {
         }
 
         this.collisionBoxArray = null;
+        this.symbolQuadsArray = null;
+        this.symbolInstancesArray = null;
         this.collisionTile = null;
         this.featureIndex = null;
         this.rawTileData = null;

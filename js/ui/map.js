@@ -52,7 +52,8 @@ var defaultOptions = {
     failIfMajorPerformanceCaveat: false,
     preserveDrawingBuffer: false,
 
-    trackResize: true
+    trackResize: true,
+    workerCount: Math.max(browser.hardwareConcurrency - 1, 1)
 };
 
 /**
@@ -93,6 +94,11 @@ var defaultOptions = {
  * @param {boolean} [options.doubleClickZoom=true] If `true`, enable the "double click to zoom" interaction (see `DoubleClickZoomHandler`).
  * @param {boolean} [options.touchZoomRotate=true] If `true`, enable the "pinch to rotate and zoom" interaction (see `TouchZoomRotateHandler`).
  * @param {boolean} [options.trackResize=true]  If `true`, automatically resize the map when the browser window resizes.
+ * @param {LngLat} [options.center] The geographic coordinate on which the map's initial viewport is centered.
+ * @param {number} [options.zoom] The zoom level of the map's initial viewport.
+ * @param {number} [options.bearing] The bearing (rotation) of the map's initial viewport measured in degrees counter-clockwise from north.
+ * @param {number} [options.pitch] The pitch of the map's initial viewport measured in degrees.
+ * @param {number} [options.workerCount=navigator.hardwareConcurrency - 1] The number of WebWorkers the map should use to process vector tile data.
  * @example
  * var map = new mapboxgl.Map({
  *   container: 'map',
@@ -105,10 +111,16 @@ var defaultOptions = {
 var Map = module.exports = function(options) {
 
     options = util.extend({}, defaultOptions, options);
+
+    if (options.workerCount < 1) {
+        throw new Error('workerCount must an integer greater than or equal to 1.');
+    }
+
     this._interactive = options.interactive;
     this._failIfMajorPerformanceCaveat = options.failIfMajorPerformanceCaveat;
     this._preserveDrawingBuffer = options.preserveDrawingBuffer;
     this._trackResize = options.trackResize;
+    this._workerCount = options.workerCount;
 
     if (typeof options.container === 'string') {
         this._container = document.getElementById(options.container);
@@ -163,12 +175,17 @@ var Map = module.exports = function(options) {
         keyboard: options.interactive && options.keyboard,
         doubleClickZoom: options.interactive && options.doubleClickZoom,
         touchZoomRotate: options.interactive && options.touchZoomRotate
-    });
+    }, options);
 
     this._hash = options.hash && (new Hash()).addTo(this);
     // don't set position from options if set through hash
     if (!this._hash || !this._hash._onHashChange()) {
-        this.jumpTo(options);
+        this.jumpTo({
+            center: options.center,
+            zoom: options.zoom,
+            bearing: options.bearing,
+            pitch: options.pitch
+        });
     }
 
     this.stacks = {};
@@ -577,7 +594,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         } else if (style instanceof Style) {
             this.style = style;
         } else {
-            this.style = new Style(style, this.animationLoop);
+            this.style = new Style(style, this.animationLoop, this._workerCount);
         }
 
         this.style
