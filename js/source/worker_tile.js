@@ -178,7 +178,7 @@ WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, c
 
     function parseBucket(tile, bucket) {
         var now = Date.now();
-        bucket.populateBuffers(collisionTile, stacks, icons);
+        bucket.populateArrays(collisionTile, stacks, icons);
         var time = Date.now() - now;
 
 
@@ -209,8 +209,7 @@ WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, c
         var symbolInstancesArray = tile.symbolInstancesArray.serialize();
         var symbolQuadsArray = tile.symbolQuadsArray.serialize();
         var transferables = [rawTileData].concat(featureIndex_.transferables).concat(collisionTile_.transferables);
-
-        var nonEmptyBuckets = buckets.filter(isBucketEmpty);
+        var nonEmptyBuckets = buckets.filter(isBucketNonEmpty);
 
         callback(null, {
             buckets: nonEmptyBuckets.map(serializeBucket),
@@ -241,8 +240,7 @@ WorkerTile.prototype.redoPlacement = function(angle, pitch, showCollisionBoxes) 
     }
 
     var collisionTile_ = collisionTile.serialize();
-
-    var nonEmptyBuckets = buckets.filter(isBucketEmpty);
+    var nonEmptyBuckets = buckets.filter(isBucketNonEmpty);
 
     return {
         result: {
@@ -253,20 +251,8 @@ WorkerTile.prototype.redoPlacement = function(angle, pitch, showCollisionBoxes) 
     };
 };
 
-function isBucketEmpty(bucket) {
-    for (var programName in bucket.arrayGroups) {
-        var programArrayGroups = bucket.arrayGroups[programName];
-        for (var k = 0; k < programArrayGroups.length; k++) {
-            var programArrayGroup = programArrayGroups[k];
-            for (var layoutOrPaint in programArrayGroup) {
-                var arrays = programArrayGroup[layoutOrPaint];
-                for (var bufferName in arrays) {
-                    if (arrays[bufferName].length > 0) return true;
-                }
-            }
-        }
-    }
-    return false;
+function isBucketNonEmpty(bucket) {
+    return !bucket.isEmpty();
 }
 
 function serializeBucket(bucket) {
@@ -276,19 +262,7 @@ function serializeBucket(bucket) {
 function getTransferables(buckets) {
     var transferables = [];
     for (var i in buckets) {
-        var bucket = buckets[i];
-        for (var programName in bucket.arrayGroups) {
-            var programArrayGroups = bucket.arrayGroups[programName];
-            for (var k = 0; k < programArrayGroups.length; k++) {
-                var programArrayGroup = programArrayGroups[k];
-                for (var layoutOrPaint in programArrayGroup) {
-                    var arrays = programArrayGroup[layoutOrPaint];
-                    for (var bufferName in arrays) {
-                        transferables.push(arrays[bufferName].arrayBuffer);
-                    }
-                }
-            }
-        }
+        buckets[i].getTransferables(transferables);
     }
     return transferables;
 }

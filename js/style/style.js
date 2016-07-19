@@ -112,6 +112,9 @@ Style.prototype = util.inherit(Evented, {
         if (!this._loaded)
             return false;
 
+        if (Object.keys(this._updates.sources).length)
+            return false;
+
         for (var id in this.sources)
             if (!this.sources[id].loaded())
                 return false;
@@ -441,6 +444,8 @@ Style.prototype = util.inherit(Evented, {
         layer.off('error', this._forwardLayerEvent);
 
         delete this._layers[id];
+        delete this._updates.layers[id];
+        delete this._updates.paintProps[id];
         this._order.splice(this._order.indexOf(id), 1);
 
         this._updates.allLayers = true;
@@ -498,7 +503,7 @@ Style.prototype = util.inherit(Evented, {
 
         var layer = this.getReferentLayer(layerId);
 
-        if (this._handleErrors(validateStyle.filter, 'layers.' + layer.id + '.filter', filter)) return this;
+        if (filter !== null && this._handleErrors(validateStyle.filter, 'layers.' + layer.id + '.filter', filter)) return this;
 
         if (util.deepEqual(layer.filter, filter)) return this;
         layer.filter = util.clone(filter);
@@ -632,8 +637,17 @@ Style.prototype = util.inherit(Evented, {
             this._handleErrors(validateStyle.filter, 'queryRenderedFeatures.filter', params.filter, true);
         }
 
+        var includedSources = {};
+        if (params.layers) {
+            for (var i = 0; i < params.layers.length; i++) {
+                var layerId = params.layers[i];
+                includedSources[this._layers[layerId].source] = true;
+            }
+        }
+
         var sourceResults = [];
         for (var id in this.sources) {
+            if (params.layers && !includedSources[id]) continue;
             var source = this.sources[id];
             if (source.queryRenderedFeatures) {
                 sourceResults.push(source.queryRenderedFeatures(queryGeometry, params, zoom, bearing));
