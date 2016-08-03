@@ -6,10 +6,12 @@ var assert = require('assert');
 
 module.exports = StructArrayType;
 
+var Uint8ClampedArray = Uint8ClampedArray || Uint8Array;
+
 var viewTypes = {
     'Int8': Int8Array,
     'Uint8': Uint8Array,
-    'Uint8Clamped': window.Uint8ClampedArray || Uint8Array,
+    'Uint8Clamped': Uint8ClampedArray,
     'Int16': Int16Array,
     'Uint16': Uint16Array,
     'Int32': Int32Array,
