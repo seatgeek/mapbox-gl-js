@@ -286,7 +286,7 @@ SymbolBucket.prototype.addFeature = function(lines, shapedText, shapedIcon, feat
 
     var list = null;
     if (isLine) {
-        list = lines;
+        list = clipLine(lines, 0, 0, EXTENT, EXTENT);
     } else {
         // Only care about looping through the outer rings
         list = classifyRings(lines, 0);
