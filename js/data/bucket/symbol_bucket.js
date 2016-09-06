@@ -285,8 +285,8 @@ SymbolBucket.prototype.addFeature = function(lines, shapedText, shapedIcon, feat
         textRepeatDistance = symbolMinDistance / 2;
 
     var list = null;
-    if (!isLine) {
-        // list = clipLine(lines, 0, 0, EXTENT, EXTENT);
+    if (isLine) {
+        list = lines;
     } else {
         // Only care about looping through the outer rings
         list = classifyRings(lines, 0);
