@@ -1,9 +1,8 @@
 'use strict';
 
-var Canvas = require('../util/canvas');
 var util = require('../util/util');
 var browser = require('../util/browser');
-var window = require('../util/browser').window;
+var window = require('../util/window');
 var Evented = require('../util/evented');
 var DOM = require('../util/dom');
 
@@ -21,6 +20,7 @@ var LngLat = require('../geo/lng_lat');
 var LngLatBounds = require('../geo/lng_lat_bounds');
 var Point = require('point-geometry');
 var Attribution = require('./control/attribution');
+var isSupported = require('mapbox-gl-supported');
 
 var defaultMinZoom = 0;
 var defaultMaxZoom = 20;
@@ -52,8 +52,7 @@ var defaultOptions = {
     failIfMajorPerformanceCaveat: false,
     preserveDrawingBuffer: false,
 
-    trackResize: true,
-    workerCount: Math.max(browser.hardwareConcurrency - 1, 1)
+    trackResize: true
 };
 
 /**
@@ -114,7 +113,6 @@ var defaultOptions = {
  * @param {number} [options.zoom=0] The initial zoom level of the map. If `zoom` is not specified in the constructor options, Mapbox GL JS will look for it in the map's style object. If it is not specified in the style, either, it will default to `0`.
  * @param {number} [options.bearing=0] The initial bearing (rotation) of the map, measured in degrees counter-clockwise from north. If `bearing` is not specified in the constructor options, Mapbox GL JS will look for it in the map's style object. If it is not specified in the style, either, it will default to `0`.
  * @param {number} [options.pitch=0] The initial pitch (tilt) of the map, measured in degrees away from the plane of the screen (0-60). If `pitch` is not specified in the constructor options, Mapbox GL JS will look for it in the map's style object. If it is not specified in the style, either, it will default to `0`.
- * @param {number} [options.workerCount=navigator.hardwareConcurrency - 1] The number of WebWorkers that Mapbox GL JS should use to process vector tile data.
  * @example
  * var map = new mapboxgl.Map({
  *   container: 'map',
@@ -128,19 +126,14 @@ var Map = module.exports = function(options) {
 
     options = util.extend({}, defaultOptions, options);
 
-    if (options.workerCount < 1) {
-        throw new Error('workerCount must an integer greater than or equal to 1.');
-    }
-
     this._interactive = options.interactive;
     this._failIfMajorPerformanceCaveat = options.failIfMajorPerformanceCaveat;
     this._preserveDrawingBuffer = options.preserveDrawingBuffer;
     this._trackResize = options.trackResize;
-    this._workerCount = options.workerCount;
     this._bearingSnap = options.bearingSnap;
 
     if (typeof options.container === 'string') {
-        this._container = document.getElementById(options.container);
+        this._container = window.document.getElementById(options.container);
     } else {
         this._container = options.container;
     }
@@ -164,7 +157,8 @@ var Map = module.exports = function(options) {
         '_onSourceUpdate',
         '_onWindowOnline',
         '_onWindowResize',
-        'onError',
+        '_contextLost',
+        '_contextRestored',
         '_update',
         '_render'
     ], this);
@@ -197,7 +191,6 @@ var Map = module.exports = function(options) {
         });
     }
 
-    this.stacks = {};
     this._classes = [];
 
     this.resize();
@@ -206,11 +199,11 @@ var Map = module.exports = function(options) {
     if (options.style) this.setStyle(options.style);
     if (options.attributionControl) this.addControl(new Attribution(options.attributionControl));
 
-    this.on('error', this.onError);
-    this.on('style.error', this.onError);
-    this.on('source.error', this.onError);
-    this.on('tile.error', this.onError);
-    this.on('layer.error', this.onError);
+    var fireError = this.fire.bind(this, 'error');
+    this.on('style.error', fireError);
+    this.on('source.error', fireError);
+    this.on('tile.error', fireError);
+    this.on('layer.error', fireError);
 };
 
 util.extend(Map.prototype, Evented);
@@ -317,14 +310,11 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @returns {Map} `this`
      */
     resize: function() {
-        var width = 0, height = 0;
+        var dimensions = this._containerDimensions();
+        var width = dimensions[0];
+        var height = dimensions[1];
 
-        if (this._container) {
-            width = this._container.offsetWidth || 400;
-            height = this._container.offsetHeight || 300;
-        }
-
-        this._canvas.resize(width, height);
+        this._resizeCanvas(width, height);
         this.transform.resize(width, height);
         this.painter.resize(width, height);
 
@@ -342,8 +332,8 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      */
     getBounds: function() {
         var bounds = new LngLatBounds(
-            this.transform.pointLocation(new Point(0, 0)),
-            this.transform.pointLocation(this.transform.size));
+            this.transform.pointLocation(new Point(0, this.transform.height)),
+            this.transform.pointLocation(new Point(this.transform.width, 0)));
 
         if (this.transform.angle || this.transform.pitch) {
             bounds.extend(this.transform.pointLocation(new Point(this.transform.size.x, 0)));
@@ -455,7 +445,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * [Feature objects](http://geojson.org/geojson-spec.html#feature-objects)
      * representing visible features that satisfy the query parameters.
      *
-     * @param {PointLike|Array<PointLike>} [region] - The geometry of the query region:
+     * @param {PointLike|Array<PointLike>} [geometry] - The geometry of the query region:
      * either a single point or southwest and northeast points describing a bounding box.
      * Omitting this parameter (i.e. calling [`Map#queryRenderedFeatures`](#Map#queryRenderedFeatures) with zero arguments,
      * or with only a `parameters` argument) is equivalent to passing a bounding box encompassing the entire
@@ -514,13 +504,29 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * // Query all rendered features from a single layer
      * var features = map.queryRenderedFeatures({ layers: ['my-layer-name'] });
      */
-    queryRenderedFeatures: function(pointOrBox, params) {
-        if (!(pointOrBox instanceof Point || Array.isArray(pointOrBox))) {
-            params = pointOrBox;
-            pointOrBox = undefined;
+    queryRenderedFeatures: function() {
+        var params = {};
+        var geometry;
+
+        if (arguments.length === 2) {
+            geometry = arguments[0];
+            params = arguments[1];
+        } else if (arguments.length === 1 && isPointLike(arguments[0])) {
+            geometry = arguments[0];
+        } else if (arguments.length === 1) {
+            params = arguments[0];
         }
-        var queryGeometry = this._makeQueryGeometry(pointOrBox);
-        return this.style.queryRenderedFeatures(queryGeometry, params, this.transform.zoom, this.transform.angle);
+
+        return this.style.queryRenderedFeatures(
+            this._makeQueryGeometry(geometry),
+            params,
+            this.transform.zoom,
+            this.transform.angle
+        );
+
+        function isPointLike(input) {
+            return input instanceof Point || Array.isArray(input);
+        }
     },
 
     _makeQueryGeometry: function(pointOrBox) {
@@ -626,7 +632,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         } else if (style instanceof Style) {
             this.style = style;
         } else {
-            this.style = new Style(style, this.animationLoop, this._workerCount);
+            this.style = new Style(style, this.animationLoop);
         }
 
         this.style
@@ -670,6 +676,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @param {string} id The ID of the source to add. Must not conflict with existing sources.
      * @param {Object} source The source object, conforming to the
      * Mapbox Style Specification's [source definition](https://www.mapbox.com/mapbox-gl-style-spec/#sources).
+     * @param {string} source.type The source type, which must be either one of the core Mapbox GL source types defined in the style specification or a custom type that has been added to the map with {@link Map#addSourceType}.
      * @fires source.add
      * @returns {Map} `this`
      */
@@ -677,6 +684,18 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         this.style.addSource(id, source);
         this._update(true);
         return this;
+    },
+
+    /**
+     * Adds a [custom source type](#Custom Sources), making it available for use with
+     * {@link Map#addSource}.
+     * @private
+     * @param {string} name The name of the source type; source definition objects use this name in the `{type: ...}` field.
+     * @param {Function} SourceType A {@link Source} constructor.
+     * @param {Function} callback Called when the source type is ready or with an error argument if there is an error.
+     */
+    addSourceType: function (name, SourceType, callback) {
+        return this.style.addSourceType(name, SourceType, callback);
     },
 
     /**
@@ -712,7 +731,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @param {Object} layer The style layer to add, conforming to the Mapbox Style Specification's
      *   [layer definition](https://www.mapbox.com/mapbox-gl-style-spec/#layers).
      * @param {string} [before] The ID of an existing layer to insert the new layer before.
-     *   If this argument is omitted, the layer will be inserted before every existing layer.
+     *   If this argument is omitted, the layer will be appended to the end of the layers array.
      * @fires layer.add
      * @returns {Map} `this`
      */
@@ -879,7 +898,19 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
      * @returns {HTMLCanvasElement} The map's `<canvas>` element.
      */
     getCanvas: function() {
-        return this._canvas.getElement();
+        return this._canvas;
+    },
+
+    _containerDimensions: function() {
+        var width = 0;
+        var height = 0;
+
+        if (this._container) {
+            width = this._container.offsetWidth || 400;
+            height = this._container.offsetHeight || 300;
+        }
+
+        return [width, height];
     },
 
     _setupContainer: function() {
@@ -890,7 +921,15 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         if (this._interactive) {
             canvasContainer.classList.add('mapboxgl-interactive');
         }
-        this._canvas = new Canvas(this, canvasContainer);
+
+        this._canvas = DOM.create('canvas', 'mapboxgl-canvas', canvasContainer);
+        this._canvas.style.position = 'absolute';
+        this._canvas.addEventListener('webglcontextlost', this._contextLost, false);
+        this._canvas.addEventListener('webglcontextrestored', this._contextRestored, false);
+        this._canvas.setAttribute('tabindex', 0);
+
+        var dimensions = this._containerDimensions();
+        this._resizeCanvas(dimensions[0], dimensions[1]);
 
         var controlContainer = this._controlContainer = DOM.create('div', 'mapboxgl-control-container', container);
         var corners = this._controlCorners = {};
@@ -899,11 +938,26 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         });
     },
 
+    _resizeCanvas: function(width, height) {
+        var pixelRatio = window.devicePixelRatio || 1;
+
+        // Request the required canvas size taking the pixelratio into account.
+        this._canvas.width = pixelRatio * width;
+        this._canvas.height = pixelRatio * height;
+
+        // Maintain the same canvas size, potentially downscaling it for HiDPI displays
+        this._canvas.style.width = width + 'px';
+        this._canvas.style.height = height + 'px';
+    },
+
     _setupPainter: function() {
-        var gl = this._canvas.getWebGLContext({
+        var attributes = util.extend({
             failIfMajorPerformanceCaveat: this._failIfMajorPerformanceCaveat,
             preserveDrawingBuffer: this._preserveDrawingBuffer
-        });
+        }, isSupported.webGLContextAttributes);
+
+        var gl = this._canvas.getContext('webgl', attributes) ||
+            this._canvas.getContext('experimental-webgl', attributes);
 
         if (!gl) {
             this.fire('error', { error: new Error('Failed to initialize WebGL') });
@@ -1023,7 +1077,7 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
                 this._styleDirty = true;
             }
 
-            if (this._sourcesDirty || this._repaint || !this.animationLoop.stopped()) {
+            if (this._sourcesDirty || this._repaint || this._styleDirty) {
                 this._rerender();
             }
 
@@ -1046,27 +1100,11 @@ util.extend(Map.prototype, /** @lends Map.prototype */{
         if (typeof window !== 'undefined') {
             window.removeEventListener('resize', this._onWindowResize, false);
         }
+        var extension = this.painter.gl.getExtension('WEBGL_lose_context');
+        if (extension) extension.loseContext();
         removeNode(this._canvasContainer);
         removeNode(this._controlContainer);
         this._container.classList.remove('mapboxgl-map');
-    },
-
-    /**
-     * Gets and sets an error handler for `style.error`, `source.error`, `layer.error`,
-     * and `tile.error` events.
-     *
-     * The default function logs errors with `console.error`.
-     *
-     * @example
-     * // Disable the default error handler
-     * map.off('error', map.onError);
-     * map.off('style.error', map.onError);
-     * map.off('source.error', map.onError);
-     * map.off('tile.error', map.onError);
-     * map.off('layer.error', map.onError);
-     */
-    onError: function(e) {
-        console.error(e.error);
     },
 
     _rerender: function() {
@@ -1216,27 +1254,6 @@ function removeNode(node) {
         node.parentNode.removeChild(node);
     }
 }
-
-/**
- * Gets and sets the map's [access token](https://www.mapbox.com/help/define-access-token/).
- *
- * @var accessToken
- * @example
- * mapboxgl.accessToken = myAccessToken;
- */
-
- /**
-  * Returns a Boolean indicating whether the browser [supports Mapbox GL JS](https://www.mapbox.com/help/mapbox-browser-support/#mapbox-gl-js).
-  *
-  * @function supported
-  * @param {Object} options
-  * @param {boolean} [options.failIfMajorPerformanceCaveat=false] If `true`,
-  *   the function will return `false` if the performance of Mapbox GL JS would
-  *   be dramatically worse than expected (i.e. a software renderer would be used).
-  * @return {boolean}
-  * @example
-  * mapboxgl.supported() // = true
-  */
 
 /**
  * A [`LngLat`](#LngLat) object or an array of two numbers representing longitude and latitude.
@@ -1433,3 +1450,15 @@ function removeNode(node) {
  * @instance
  * @property {MapMouseEvent | MapTouchEvent} data
  */
+
+ /**
+  * Fired if any error occurs. This is GL JS's primary error reporting
+  * mechanism. We use an event instead of `throw` to better accommodate
+  * asyncronous operations. If no listeners are bound to the `error` event, the
+  * error will be printed to the console.
+  *
+  * @event error
+  * @memberof Map
+  * @instance
+  * @property {{error: {message: string}}} data
+  */

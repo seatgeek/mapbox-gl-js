@@ -1,8 +1,8 @@
 'use strict';
 
-var DOM = require('../../util/dom'),
-    Point = require('point-geometry'),
-    util = require('../../util/util');
+var DOM = require('../../util/dom');
+var util = require('../../util/util');
+var window = require('../../util/window');
 
 module.exports = DragRotateHandler;
 
@@ -21,11 +21,13 @@ var inertiaLinearity = 0.25,
  * @param {Object} [options]
  * @param {number} [options.bearingSnap] The threshold, measured in degrees, that determines when the map's
  *   bearing (rotation) will snap to north.
+ * @param {bool} [options.pitchWithRotate=true] Control the map pitch in addition to the bearing
  */
 function DragRotateHandler(map, options) {
     this._map = map;
     this._el = map.getCanvasContainer();
     this._bearingSnap = options.bearingSnap;
+    this._pitchWithRotate = options.pitchWithRotate !== false;
 
     util.bindHandlers(this);
 }
@@ -81,22 +83,13 @@ DragRotateHandler.prototype = {
         if (this._ignoreEvent(e)) return;
         if (this.isActive()) return;
 
-        document.addEventListener('mousemove', this._onMove);
-        document.addEventListener('mouseup', this._onUp);
+        window.document.addEventListener('mousemove', this._onMove);
+        window.document.addEventListener('mouseup', this._onUp);
 
         this._active = false;
         this._inertia = [[Date.now(), this._map.getBearing()]];
         this._startPos = this._pos = DOM.mousePos(this._el, e);
         this._center = this._map.transform.centerPoint;  // Center of rotation
-
-        // If the first click was too close to the center, move the center of rotation by 200 pixels
-        // in the direction of the click.
-        var startToCenter = this._startPos.sub(this._center),
-            startToCenterDist = startToCenter.mag();
-
-        if (startToCenterDist < 200) {
-            this._center = this._startPos.add(new Point(-200, 0)._rotate(startToCenter.angle()));
-        }
 
         e.preventDefault();
     },
@@ -115,9 +108,10 @@ DragRotateHandler.prototype = {
 
         var p1 = this._pos,
             p2 = DOM.mousePos(this._el, e),
-            center = this._center,
-            bearingDiff = p1.sub(center).angleWith(p2.sub(center)) / Math.PI * 180,
+            bearingDiff = (p1.x - p2.x) * 0.8,
+            pitchDiff = (p1.y - p2.y) * -0.5,
             bearing = map.getBearing() - bearingDiff,
+            pitch = map.getPitch() - pitchDiff,
             inertia = this._inertia,
             last = inertia[inertia.length - 1];
 
@@ -125,6 +119,7 @@ DragRotateHandler.prototype = {
         inertia.push([Date.now(), map._normalizeBearing(bearing, last[1])]);
 
         map.transform.bearing = bearing;
+        if (this._pitchWithRotate) map.transform.pitch = pitch;
 
         this._fireEvent('rotate', e);
         this._fireEvent('move', e);
@@ -134,8 +129,8 @@ DragRotateHandler.prototype = {
 
     _onUp: function (e) {
         if (this._ignoreEvent(e)) return;
-        document.removeEventListener('mousemove', this._onMove);
-        document.removeEventListener('mouseup', this._onUp);
+        window.document.removeEventListener('mousemove', this._onMove);
+        window.document.removeEventListener('mouseup', this._onUp);
 
         if (!this.isActive()) return;
 

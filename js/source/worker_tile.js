@@ -23,7 +23,7 @@ function WorkerTile(params) {
     this.showCollisionBoxes = params.showCollisionBoxes;
 }
 
-WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, callback) {
+WorkerTile.prototype.parse = function(data, layerFamilies, actor, callback) {
 
     this.status = 'parsing';
     this.data = data;
@@ -34,8 +34,6 @@ WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, c
     var collisionTile = new CollisionTile(this.angle, this.pitch, this.collisionBoxArray);
     var featureIndex = new FeatureIndex(this.coord, this.overscaling, collisionTile, data.layers);
     var sourceLayerCoder = new DictionaryCoder(data.layers ? Object.keys(data.layers).sort() : ['_geojsonTileLayer']);
-
-    var stats = { _total: 0 };
 
     var tile = this;
     var bucketsById = {};
@@ -177,9 +175,7 @@ WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, c
     }
 
     function parseBucket(tile, bucket) {
-        var now = Date.now();
         bucket.populateArrays(collisionTile, stacks, icons);
-        var time = Date.now() - now;
 
 
         if (bucket.type !== 'symbol') {
@@ -190,9 +186,6 @@ WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, c
         }
 
         bucket.features = null;
-
-        stats._total += time;
-        stats[bucket.id] = (stats[bucket.id] || 0) + time;
     }
 
     function done() {
@@ -208,19 +201,18 @@ WorkerTile.prototype.parse = function(data, layerFamilies, actor, rawTileData, c
         var collisionBoxArray = tile.collisionBoxArray.serialize();
         var symbolInstancesArray = tile.symbolInstancesArray.serialize();
         var symbolQuadsArray = tile.symbolQuadsArray.serialize();
-        var transferables = [rawTileData].concat(featureIndex_.transferables).concat(collisionTile_.transferables);
         var nonEmptyBuckets = buckets.filter(isBucketNonEmpty);
 
         callback(null, {
             buckets: nonEmptyBuckets.map(serializeBucket),
-            bucketStats: stats,
             featureIndex: featureIndex_.data,
             collisionTile: collisionTile_.data,
             collisionBoxArray: collisionBoxArray,
             symbolInstancesArray: symbolInstancesArray,
-            symbolQuadsArray: symbolQuadsArray,
-            rawTileData: rawTileData
-        }, getTransferables(nonEmptyBuckets).concat(transferables));
+            symbolQuadsArray: symbolQuadsArray
+        }, getTransferables(nonEmptyBuckets)
+            .concat(featureIndex_.transferables)
+            .concat(collisionTile_.transferables));
     }
 };
 

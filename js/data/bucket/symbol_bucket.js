@@ -14,6 +14,8 @@ var clipLine = require('../../symbol/clip_line');
 var util = require('../../util/util');
 var loadGeometry = require('../load_geometry');
 var CollisionFeature = require('../../symbol/collision_feature');
+var findPoleOfInaccessibility = require('../../util/find_pole_of_inaccessibility');
+var classifyRings = require('../../util/classify_rings');
 
 var shapeText = Shaping.shapeText;
 var shapeIcon = Shaping.shapeIcon;
@@ -39,6 +41,11 @@ function SymbolBucket(options) {
     this.fontstack = options.fontstack;
 }
 
+// this constant is based on the size of the glyphQuadEndIndex and iconQuadEndIndex
+// in the symbol_instances StructArrayType
+// eg the max valid UInt16 is 65,535
+SymbolBucket.MAX_QUADS = 65535;
+
 SymbolBucket.prototype = util.inherit(Bucket, {});
 
 SymbolBucket.prototype.serialize = function() {
@@ -60,12 +67,12 @@ var layoutVertexArrayType = new Bucket.VertexArrayType([{
     components: 2,
     type: 'Int16'
 }, {
-    name: 'a_data1',
-    components: 4,
-    type: 'Uint8'
-}, {
-    name: 'a_data2',
+    name: 'a_texture_pos',
     components: 2,
+    type: 'Uint16'
+}, {
+    name: 'a_data',
+    components: 4,
     type: 'Uint8'
 }]);
 
@@ -73,20 +80,23 @@ var elementArrayType = new Bucket.ElementArrayType();
 
 function addVertex(array, x, y, ox, oy, tx, ty, minzoom, maxzoom, labelminzoom, labelangle) {
     return array.emplaceBack(
-            // pos
+            // a_pos
             x,
             y,
-            // offset
-            Math.round(ox * 64), // use 1/64 pixels for placement
+
+            // a_offset
+            Math.round(ox * 64),
             Math.round(oy * 64),
-            // data1
-            tx / 4,                   // tex
-            ty / 4,                   // tex
+
+            // a_texture_pos
+            tx / 4, // x coordinate of symbol on glyph atlas texture
+            ty / 4, // y coordinate of symbol on glyph atlas texture
+
+            // a_data
             (labelminzoom || 0) * 10, // labelminzoom
-            labelangle,               // labelangle
-            // data2
-            (minzoom || 0) * 10,               // minzoom
-            Math.min(maxzoom || 25, 25) * 10); // minzoom
+            labelangle, // labelangle
+            (minzoom || 0) * 10, // minzoom
+            Math.min(maxzoom || 25, 25) * 10); // maxzoom
 }
 
 SymbolBucket.prototype.addCollisionBoxVertex = function(layoutVertexArray, point, extrude, maxZoom, placementZoom) {
@@ -270,15 +280,27 @@ SymbolBucket.prototype.addFeature = function(lines, shapedText, shapedIcon, feat
         iconAlongLine = layout['icon-rotation-alignment'] === 'map' && layout['symbol-placement'] === 'line',
         mayOverlap = layout['text-allow-overlap'] || layout['icon-allow-overlap'] ||
             layout['text-ignore-placement'] || layout['icon-ignore-placement'],
-        isLine = layout['symbol-placement'] === 'line',
+        symbolPlacement = layout['symbol-placement'],
+        isLine = symbolPlacement === 'line',
         textRepeatDistance = symbolMinDistance / 2;
 
-    for (var i = 0; i < lines.length; i++) {
-        var line = lines[i];
+    var list = null;
+    if (!isLine) {
+        // list = clipLine(lines, 0, 0, EXTENT, EXTENT);
+    } else {
+        // Only care about looping through the outer rings
+        list = classifyRings(lines, 0);
+    }
+
+    for (var i = 0; i < list.length; i++) {
+        var anchors = null;
+        // At this point it is a list of points for a line or a list of polygon rings
+        var pointsOrRings = list[i];
+        var line = null;
 
         // Calculate the anchor points around which you want to place labels
-        var anchors;
         if (isLine) {
+            line = pointsOrRings;
             anchors = getAnchors(
                 line,
                 symbolMinDistance,
@@ -291,8 +313,12 @@ SymbolBucket.prototype.addFeature = function(lines, shapedText, shapedIcon, feat
                 EXTENT
             );
         } else {
-            anchors = [ new Anchor(line[0].x, line[0].y, 0) ];
+            line = pointsOrRings[0];
+            anchors = this.findPolygonAnchors(pointsOrRings);
         }
+
+
+        // Here line is a list of points that is either the outer ring of a polygon or just a line
 
         // For each potential label, create the placement features used to check for collisions, and the quads use for rendering.
         for (var j = 0, len = anchors.length; j < len; j++) {
@@ -324,6 +350,23 @@ SymbolBucket.prototype.addFeature = function(lines, shapedText, shapedIcon, feat
                 iconBoxScale, iconPadding, iconAlongLine, {zoom: this.zoom}, feature.properties);
         }
     }
+};
+
+SymbolBucket.prototype.findPolygonAnchors = function(polygonRings) {
+
+    var outerRing = polygonRings[0];
+    if (outerRing.length === 0) {
+        return [];
+    } else if (outerRing.length < 3 || !util.isClosedPolygon(outerRing)) {
+        return [ new Anchor(outerRing[0].x, outerRing[0].y, 0) ];
+    }
+
+    var anchors = null;
+    // 16 here represents 2 pixels
+    var poi = findPoleOfInaccessibility(polygonRings, 16);
+    anchors = [ new Anchor(poi.x, poi.y, 0) ];
+
+    return anchors;
 };
 
 SymbolBucket.prototype.anchorIsTooClose = function(text, repeatDistance, anchor) {
@@ -587,6 +630,8 @@ SymbolBucket.prototype.addSymbolInstance = function(anchor, line, shapedText, sh
 
     var iconBoxStartIndex = iconCollisionFeature ? iconCollisionFeature.boxStartIndex : this.collisionBoxArray.length;
     var iconBoxEndIndex = iconCollisionFeature ? iconCollisionFeature.boxEndIndex : this.collisionBoxArray.length;
+    if (iconQuadEndIndex > SymbolBucket.MAX_QUADS) util.warnOnce("Too many symbols being rendered in a tile. See https://github.com/mapbox/mapbox-gl-js/issues/2907");
+    if (glyphQuadEndIndex > SymbolBucket.MAX_QUADS) util.warnOnce("Too many glyphs being rendered in a tile. See https://github.com/mapbox/mapbox-gl-js/issues/2907");
 
     return this.symbolInstancesArray.emplaceBack(
         textBoxStartIndex,

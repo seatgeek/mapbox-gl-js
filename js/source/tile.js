@@ -51,19 +51,26 @@ Tile.prototype = {
      * @returns {undefined}
      * @private
      */
-    loadVectorData: function(data, style) {
+    loadVectorData: function(data, painter) {
+        if (this.hasData()) {
+            this.unloadVectorData(painter);
+        }
+
         this.state = 'loaded';
 
         // empty GeoJSON tile
         if (!data) return;
 
+        if (data.rawTileData) {
+            this.rawTileData = data.rawTileData;
+        }
+
         this.collisionBoxArray = new CollisionBoxArray(data.collisionBoxArray);
         this.collisionTile = new CollisionTile(data.collisionTile, this.collisionBoxArray);
         this.symbolInstancesArray = new SymbolInstancesArray(data.symbolInstancesArray);
         this.symbolQuadsArray = new SymbolQuadsArray(data.symbolQuadsArray);
-        this.featureIndex = new FeatureIndex(data.featureIndex, data.rawTileData, this.collisionTile);
-        this.rawTileData = data.rawTileData;
-        this.buckets = unserializeBuckets(data.buckets, style);
+        this.featureIndex = new FeatureIndex(data.featureIndex, this.rawTileData, this.collisionTile);
+        this.buckets = unserializeBuckets(data.buckets, painter.style);
     },
 
     /**
@@ -153,7 +160,7 @@ Tile.prototype = {
         if (!this.rawTileData) return;
 
         if (!this.vtLayers) {
-            this.vtLayers = new vt.VectorTile(new Protobuf(new Uint8Array(this.rawTileData))).layers;
+            this.vtLayers = new vt.VectorTile(new Protobuf(this.rawTileData)).layers;
         }
 
         var layer = this.vtLayers._geojsonTileLayer || this.vtLayers[params.sourceLayer];
@@ -173,7 +180,7 @@ Tile.prototype = {
         }
     },
 
-    isRenderable: function() {
+    hasData: function() {
         return this.state === 'loaded' || this.state === 'reloading';
     }
 };

@@ -1,3 +1,62 @@
+## 0.23.0 (August 25 2016)
+
+#### New Features & Improvements
+
+* Add support for `line-color` property functions #2938
+* Add `Scale` control #2940 #3042
+* Improve polygon label placement by rendering labels at the pole of inaccessability #3038
+* Add `Popup` `offset` option #1962
+* Add `Marker#bindPopup` method #3056
+
+#### Performance Improvements
+
+* Improve performance of pages with multiple maps using a shared `WebWorker` pool #2952
+
+#### Bugfixes
+
+* Make `LatLngBounds` obey its documented argument order (`southwest`, `northeast`), allowing bounds across the dateline #2414 :warning: **BREAKING CHANGE** :warning:
+* Fix bug causing `fill-opacity` property functions to not render as expected #3061
+
+## 0.22.1 (August 18 2016)
+
+#### New Features & Improvements
+
+ * Reduce library size by using minified version of style specification #2998
+ * Add a warning when rendering artifacts occur due to too many symbols or glyphs being rendered in a tile #2966
+
+#### Bugfixes
+
+ * Fix bug causing exception to be thrown by `Map#querySourceFeatures` #3022
+ * Fix bug causing `Map#loaded` to return true while there are outstanding tile updates #2847
+
+## 0.22.0 (August 11 2016)
+
+#### Breaking Changes
+
+ * The `GeoJSONSource`, `VideoSource`, `ImageSource` constructors are now private. Please use `map.addSource({...})` to create sources and `map.getSource(...).setData(...)` to update GeoJSON sources. #2667
+ * `Map#onError` has been removed. You may catch errors by listening for the `error` event. If no listeners are bound to `error`, error messages will be printed to the console. #2852
+
+#### New Features & Improvements
+
+ * Increase max glyph atlas size to accomodate alphabets with large numbers of characters #2930
+ * Add support for filtering features on GeoJSON / vector tile `$id` #2888
+ * Update geolocate icon #2973
+ * Add a `close` event to `Popup`s #2953
+ * Add a `offset` option to `Marker` #2885
+ * Print `error` events without any listeners to the console #2852
+ * Refactored `Source` interface to prepare for custom source types #2667
+
+#### Bugfixes
+
+ * Fix opacity property-functions for fill layers #2971
+ * Fix `DataCloneError` in Firefox and IE11 #2559
+ * Fix bug preventing camera animations from being triggered in `moveend` listeners #2944
+ * Fix bug preventing `fill-outline-color` from being unset #2964
+ * Fix webpack support #2887
+ * Prevent buttons in controls from acting like form submit buttons #2935
+ * Fix bug preventing map interactions near two controls in the same corner #2932
+ * Fix crash resulting for large style batch queue #2926
+
 ## 0.21.0 (July 13 2016)
 
 #### Breaking Changes

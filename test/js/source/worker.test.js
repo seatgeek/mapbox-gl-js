@@ -26,7 +26,7 @@ test('before', function(t) {
 test('load tile', function(t) {
     t.test('calls callback on error', function(t) {
         var worker = new Worker(_self);
-        worker['load tile']({
+        worker['load tile'](0, {
             source: 'source',
             uid: 0,
             url: 'http://localhost:2900/error'
@@ -39,50 +39,28 @@ test('load tile', function(t) {
     t.end();
 });
 
-test('abort tile', function(t) {
-    t.test('aborts pending request', function(t) {
-        var worker = new Worker(_self);
-
-        worker['load tile']({
-            source: 'source',
-            uid: 0,
-            url: 'http://localhost:2900/abort'
-        }, t.fail);
-
-        worker['abort tile']({
-            source: 'source',
-            uid: 0
-        });
-
-        t.deepEqual(worker.loading, { source: {} });
-        t.end();
-    });
-
-    t.end();
-});
-
 test('set layers', function(t) {
     var worker = new Worker(_self);
 
-    worker['set layers']([
+    worker['set layers'](0, [
         { id: 'one', type: 'circle', paint: { 'circle-color': 'red' }  },
         { id: 'two', type: 'circle', paint: { 'circle-color': 'green' }  },
         { id: 'three', ref: 'two', type: 'circle', paint: { 'circle-color': 'blue' } }
     ]);
 
-    t.equal(worker.layers.one.id, 'one');
-    t.equal(worker.layers.two.id, 'two');
-    t.equal(worker.layers.three.id, 'three');
+    t.equal(worker.layers[0].one.id, 'one');
+    t.equal(worker.layers[0].two.id, 'two');
+    t.equal(worker.layers[0].three.id, 'three');
 
-    t.equal(worker.layers.one.getPaintProperty('circle-color'), 'red');
-    t.equal(worker.layers.two.getPaintProperty('circle-color'), 'green');
-    t.equal(worker.layers.three.getPaintProperty('circle-color'), 'blue');
+    t.equal(worker.layers[0].one.getPaintProperty('circle-color'), 'red');
+    t.equal(worker.layers[0].two.getPaintProperty('circle-color'), 'green');
+    t.equal(worker.layers[0].three.getPaintProperty('circle-color'), 'blue');
 
-    t.equal(worker.layerFamilies.one.length, 1);
-    t.equal(worker.layerFamilies.one[0].id, 'one');
-    t.equal(worker.layerFamilies.two.length, 2);
-    t.equal(worker.layerFamilies.two[0].id, 'two');
-    t.equal(worker.layerFamilies.two[1].id, 'three');
+    t.equal(worker.layerFamilies[0].one.length, 1);
+    t.equal(worker.layerFamilies[0].one[0].id, 'one');
+    t.equal(worker.layerFamilies[0].two.length, 2);
+    t.equal(worker.layerFamilies[0].two[0].id, 'two');
+    t.equal(worker.layerFamilies[0].two[1].id, 'three');
 
     t.end();
 });
@@ -90,43 +68,72 @@ test('set layers', function(t) {
 test('update layers', function(t) {
     var worker = new Worker(_self);
 
-    worker['set layers']([
+    worker['set layers'](0, [
         { id: 'one', type: 'circle', paint: { 'circle-color': 'red' }  },
         { id: 'two', type: 'circle', paint: { 'circle-color': 'green' }  },
         { id: 'three', ref: 'two', type: 'circle', paint: { 'circle-color': 'blue' } }
     ]);
 
-    worker['update layers']({
+    worker['update layers'](0, {
         one: { id: 'one', type: 'circle', paint: { 'circle-color': 'cyan' }  },
         two: { id: 'two', type: 'circle', paint: { 'circle-color': 'magenta' }  },
         three: { id: 'three', ref: 'two', type: 'circle', paint: { 'circle-color': 'yellow' } }
     });
 
-    t.equal(worker.layers.one.getPaintProperty('circle-color'), 'cyan');
-    t.equal(worker.layers.two.getPaintProperty('circle-color'), 'magenta');
-    t.equal(worker.layers.three.getPaintProperty('circle-color'), 'yellow');
+    t.equal(worker.layers[0].one.getPaintProperty('circle-color'), 'cyan');
+    t.equal(worker.layers[0].two.getPaintProperty('circle-color'), 'magenta');
+    t.equal(worker.layers[0].three.getPaintProperty('circle-color'), 'yellow');
 
     t.end();
 });
 
-test('remove tile', function(t) {
-    t.test('removes loaded tile', function(t) {
-        var worker = new Worker(_self);
-
-        worker.loaded = {
-            source: {
-                '0': {}
-            }
+test('redo placement', function(t) {
+    var worker = new Worker(_self);
+    _self.registerWorkerSource('test', function() {
+        this.redoPlacement = function(options) {
+            t.ok(options.mapbox);
+            t.end();
         };
-
-        worker['remove tile']({
-            source: 'source',
-            uid: 0
-        });
-
-        t.deepEqual(worker.loaded, { source: {} });
-        t.end();
     });
+
+    worker['redo placement'](0, {type: 'test', mapbox: true});
+});
+
+test('update layers isolates different instances\' data', function(t) {
+    var worker = new Worker(_self);
+
+    worker['set layers'](0, [
+        { id: 'one', type: 'circle', paint: { 'circle-color': 'red' }  },
+        { id: 'two', type: 'circle', paint: { 'circle-color': 'green' }  },
+        { id: 'three', ref: 'two', type: 'circle', paint: { 'circle-color': 'blue' } }
+    ]);
+
+    worker['set layers'](1, [
+        { id: 'one', type: 'circle', paint: { 'circle-color': 'red' }  },
+        { id: 'two', type: 'circle', paint: { 'circle-color': 'green' }  },
+        { id: 'three', ref: 'two', type: 'circle', paint: { 'circle-color': 'blue' } }
+    ]);
+
+    worker['update layers'](1, {
+        one: { id: 'one', type: 'circle', paint: { 'circle-color': 'cyan' }  },
+        two: { id: 'two', type: 'circle', paint: { 'circle-color': 'magenta' }  },
+        three: { id: 'three', ref: 'two', type: 'circle', paint: { 'circle-color': 'yellow' } }
+    });
+
+    t.equal(worker.layers[0].one.id, 'one');
+    t.equal(worker.layers[0].two.id, 'two');
+    t.equal(worker.layers[0].three.id, 'three');
+
+    t.equal(worker.layers[0].one.getPaintProperty('circle-color'), 'red');
+    t.equal(worker.layers[0].two.getPaintProperty('circle-color'), 'green');
+    t.equal(worker.layers[0].three.getPaintProperty('circle-color'), 'blue');
+
+    t.equal(worker.layerFamilies[0].one.length, 1);
+    t.equal(worker.layerFamilies[0].one[0].id, 'one');
+    t.equal(worker.layerFamilies[0].two.length, 2);
+    t.equal(worker.layerFamilies[0].two[0].id, 'two');
+    t.equal(worker.layerFamilies[0].two[1].id, 'three');
+
 
     t.end();
 });

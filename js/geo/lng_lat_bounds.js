@@ -26,20 +26,42 @@ function LngLatBounds(sw, ne) {
     if (!sw) {
         return;
     } else if (ne) {
-        this.extend(sw).extend(ne);
+        this.setSouthWest(sw).setNorthEast(ne);
     } else if (sw.length === 4) {
-        this.extend([sw[0], sw[1]]).extend([sw[2], sw[3]]);
+        this.setSouthWest([sw[0], sw[1]]).setNorthEast([sw[2], sw[3]]);
     } else {
-        this.extend(sw[0]).extend(sw[1]);
+        this.setSouthWest(sw[0]).setNorthEast(sw[1]);
     }
 }
 
 LngLatBounds.prototype = {
 
     /**
-     * Extends the bounding box to include an area represented by a `LngLat` or `LngLatBounds`.
+     * Set the northeast corner of the bounding box
      *
-     * @param {LngLatLike|LngLatBoundsLike} obj The area that the bounding box will extend to include.
+     * @param {LngLatLike} ne
+     * @returns {LngLatBounds} `this`
+     */
+    setNorthEast: function(ne) {
+        this._ne = LngLat.convert(ne);
+        return this;
+    },
+
+    /**
+     * Set the southwest corner of the bounding box
+     *
+     * @param {LngLatLike} sw
+     * @returns {LngLatBounds} `this`
+     */
+    setSouthWest: function(sw) {
+        this._sw = LngLat.convert(sw);
+        return this;
+    },
+
+    /**
+     * Extend the bounds to include a given LngLat or LngLatBounds.
+     *
+     * @param {LngLat|LngLatBounds} obj object to extend to
      * @returns {LngLatBounds} `this`
      */
     extend: function(obj) {
