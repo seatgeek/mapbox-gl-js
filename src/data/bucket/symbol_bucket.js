@@ -457,7 +457,7 @@ class SymbolBucket {
         };
 
         if (symbolPlacement === 'line') {
-            for (const line of clipLine(feature.geometry, 0, 0, EXTENT, EXTENT)) {
+            for (const line of feature.geometry) {
                 const anchors = getAnchors(
                     line,
                     symbolMinDistance,
