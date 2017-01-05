@@ -77,11 +77,6 @@ class WorkerTile {
                 continue;
             }
 
-            if (sourceLayer.version === 1) {
-                util.warnOnce(`Vector tile source "${this.source}" layer "${sourceLayerId}" ` +
-                    `does not use vector tile spec v2 and therefore may have some rendering errors.`);
-            }
-
             const sourceLayerIndex = sourceLayerCoder.encode(sourceLayerId);
             const features = [];
             for (let index = 0; index < sourceLayer.length; index++) {
