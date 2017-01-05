@@ -1,54 +1,53 @@
 'use strict';
 
-var util = require('../../util/util');
-var StyleLayer = require('../style_layer');
+const StyleLayer = require('../style_layer');
+const FillBucket = require('../../data/bucket/fill_bucket');
 
-function FillStyleLayer() {
-    StyleLayer.apply(this, arguments);
-}
+class FillStyleLayer extends StyleLayer {
 
-FillStyleLayer.prototype = util.inherit(StyleLayer, {
-
-    getPaintValue: function(name, globalProperties, featureProperties) {
+    getPaintValue(name, globalProperties, featureProperties) {
         if (name === 'fill-outline-color' && this.getPaintProperty('fill-outline-color') === undefined) {
-            return StyleLayer.prototype.getPaintValue.call(this, 'fill-color', globalProperties, featureProperties);
+            return super.getPaintValue('fill-color', globalProperties, featureProperties);
         } else {
-            return StyleLayer.prototype.getPaintValue.call(this, name, globalProperties, featureProperties);
-        }
-    },
-
-    getPaintValueStopZoomLevels: function(name) {
-        if (name === 'fill-outline-color' && this.getPaintProperty('fill-outline-color') === undefined) {
-            return StyleLayer.prototype.getPaintValueStopZoomLevels.call(this, 'fill-color');
-        } else {
-            return StyleLayer.prototype.getPaintValueStopZoomLevels.call(this, arguments);
-        }
-    },
-
-    getPaintInterpolationT: function(name, zoom) {
-        if (name === 'fill-outline-color' && this.getPaintProperty('fill-outline-color') === undefined) {
-            return StyleLayer.prototype.getPaintInterpolationT.call(this, 'fill-color', zoom);
-        } else {
-            return StyleLayer.prototype.getPaintInterpolationT.call(this, name, zoom);
-        }
-    },
-
-    isPaintValueFeatureConstant: function(name) {
-        if (name === 'fill-outline-color' && this.getPaintProperty('fill-outline-color') === undefined) {
-            return StyleLayer.prototype.isPaintValueFeatureConstant.call(this, 'fill-color');
-        } else {
-            return StyleLayer.prototype.isPaintValueFeatureConstant.call(this, name);
-        }
-    },
-
-    isPaintValueZoomConstant: function(name) {
-        if (name === 'fill-outline-color' && this.getPaintProperty('fill-outline-color') === undefined) {
-            return StyleLayer.prototype.isPaintValueZoomConstant.call(this, 'fill-color');
-        } else {
-            return StyleLayer.prototype.isPaintValueZoomConstant.call(this, name);
+            return super.getPaintValue(name, globalProperties, featureProperties);
         }
     }
 
-});
+    getPaintValueStopZoomLevels(name) {
+        if (name === 'fill-outline-color' && this.getPaintProperty('fill-outline-color') === undefined) {
+            return super.getPaintValueStopZoomLevels('fill-color');
+        } else {
+            return super.getPaintValueStopZoomLevels(name);
+        }
+    }
+
+    getPaintInterpolationT(name, globalProperties) {
+        if (name === 'fill-outline-color' && this.getPaintProperty('fill-outline-color') === undefined) {
+            return super.getPaintInterpolationT('fill-color', globalProperties);
+        } else {
+            return super.getPaintInterpolationT(name, globalProperties);
+        }
+    }
+
+    isPaintValueFeatureConstant(name) {
+        if (name === 'fill-outline-color' && this.getPaintProperty('fill-outline-color') === undefined) {
+            return super.isPaintValueFeatureConstant('fill-color');
+        } else {
+            return super.isPaintValueFeatureConstant(name);
+        }
+    }
+
+    isPaintValueZoomConstant(name) {
+        if (name === 'fill-outline-color' && this.getPaintProperty('fill-outline-color') === undefined) {
+            return super.isPaintValueZoomConstant('fill-color');
+        } else {
+            return super.isPaintValueZoomConstant(name);
+        }
+    }
+
+    createBucket(options) {
+        return new FillBucket(options);
+    }
+}
 
 module.exports = FillStyleLayer;

@@ -1,9 +1,9 @@
 'use strict';
 
-var DOM = require('../util/dom');
-var Point = require('point-geometry');
+const DOM = require('../util/dom');
+const Point = require('point-geometry');
 
-var handlers = {
+const handlers = {
     scrollZoom: require('./handler/scroll_zoom'),
     boxZoom: require('./handler/box_zoom'),
     dragRotate: require('./handler/drag_rotate'),
@@ -14,18 +14,20 @@ var handlers = {
 };
 
 module.exports = function bindHandlers(map, options) {
-    var el = map.getCanvasContainer();
-    var contextMenuEvent = null;
-    var startPos = null;
-    var tapped = null;
+    const el = map.getCanvasContainer();
+    let contextMenuEvent = null;
+    let mouseDown = false;
+    let startPos = null;
+    let tapped = null;
 
-    for (var name in handlers) {
-        map[name] = new handlers[name](map);
-        if (options[name]) {
+    for (const name in handlers) {
+        map[name] = new handlers[name](map, options);
+        if (options.interactive && options[name]) {
             map[name].enable();
         }
     }
 
+    el.addEventListener('mouseout', onMouseOut, false);
     el.addEventListener('mousedown', onMouseDown, false);
     el.addEventListener('mouseup', onMouseUp, false);
     el.addEventListener('mousemove', onMouseMove, false);
@@ -37,20 +39,28 @@ module.exports = function bindHandlers(map, options) {
     el.addEventListener('dblclick', onDblClick, false);
     el.addEventListener('contextmenu', onContextMenu, false);
 
+    function onMouseOut(e) {
+        fireMouseEvent('mouseout', e);
+    }
+
     function onMouseDown(e) {
         map.stop();
         startPos = DOM.mousePos(el, e);
         fireMouseEvent('mousedown', e);
+
+        mouseDown = true;
     }
 
     function onMouseUp(e) {
-        var rotating = map.dragRotate && map.dragRotate.isActive();
+        const rotating = map.dragRotate && map.dragRotate.isActive();
 
         if (contextMenuEvent && !rotating) {
+            // This will be the case for Mac
             fireMouseEvent('contextmenu', contextMenuEvent);
         }
 
         contextMenuEvent = null;
+        mouseDown = false;
         fireMouseEvent('mouseup', e);
     }
 
@@ -58,7 +68,7 @@ module.exports = function bindHandlers(map, options) {
         if (map.dragPan && map.dragPan.isActive()) return;
         if (map.dragRotate && map.dragRotate.isActive()) return;
 
-        var target = e.toElement || e.target;
+        let target = e.toElement || e.target;
         while (target && target !== el) target = target.parentNode;
         if (target !== el) return;
 
@@ -98,7 +108,7 @@ module.exports = function bindHandlers(map, options) {
     }
 
     function onClick(e) {
-        var pos = DOM.mousePos(el, e);
+        const pos = DOM.mousePos(el, e);
 
         if (pos.equals(startPos)) {
             fireMouseEvent('click', e);
@@ -111,12 +121,20 @@ module.exports = function bindHandlers(map, options) {
     }
 
     function onContextMenu(e) {
-        contextMenuEvent = e;
+        const rotating = map.dragRotate && map.dragRotate.isActive();
+        if (!mouseDown && !rotating) {
+            // Windows: contextmenu fired on mouseup, so fire event now
+            fireMouseEvent('contextmenu', e);
+        } else if (mouseDown) {
+            // Mac: contextmenu fired on mousedown; we save it until mouseup for consistency's sake
+            contextMenuEvent = e;
+        }
+
         e.preventDefault();
     }
 
     function fireMouseEvent(type, e) {
-        var pos = DOM.mousePos(el, e);
+        const pos = DOM.mousePos(el, e);
 
         return map.fire(type, {
             lngLat: map.unproject(pos),
@@ -126,17 +144,43 @@ module.exports = function bindHandlers(map, options) {
     }
 
     function fireTouchEvent(type, e) {
-        var touches = DOM.touchPos(el, e);
-        var singular = touches.reduce(function(prev, curr, i, arr) {
+        const touches = DOM.touchPos(el, e);
+        const singular = touches.reduce((prev, curr, i, arr) => {
             return prev.add(curr.div(arr.length));
         }, new Point(0, 0));
 
         return map.fire(type, {
             lngLat: map.unproject(singular),
             point: singular,
-            lngLats: touches.map(function(t) { return map.unproject(t); }, this),
+            lngLats: touches.map((t) => { return map.unproject(t); }, this),
             points: touches,
             originalEvent: e
         });
     }
 };
+
+/**
+ * @typedef {Object} MapMouseEvent
+ * @property {string} type The event type.
+ * @property {Map} target The `Map` object that fired the event.
+ * @property {MouseEvent} originalEvent
+ * @property {Point} point The pixel coordinates of the mouse event target, relative to the map
+ *   and measured from the top left corner.
+ * @property {LngLat} lngLat The geographic location on the map of the mouse event target.
+ */
+
+/**
+ * @typedef {Object} MapTouchEvent
+ * @property {string} type The event type.
+ * @property {Map} target The `Map` object that fired the event.
+ * @property {TouchEvent} originalEvent
+ * @property {Point} point The pixel coordinates of the center of the touch event points, relative to the map
+ *   and measured from the top left corner.
+ * @property {LngLat} lngLat The geographic location on the map of the center of the touch event points.
+ * @property {Array<Point>} points The array of pixel coordinates corresponding to
+ *   a [touch event's `touches`](https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent/touches)
+ *   property.
+ * @property {Array<LngLat>} lngLats The geographical locations on the map corresponding to
+ *   a [touch event's `touches`](https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent/touches)
+ *   property.
+ */

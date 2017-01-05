@@ -1,19 +1,19 @@
 'use strict';
 
-var test = require('tap').test;
-var fs = require('fs');
-var path = require('path');
-var Protobuf = require('pbf');
-var VectorTile = require('vector-tile').VectorTile;
-var classifyRings = require('../../../js/util/classify_rings');
+const test = require('mapbox-gl-js-test').test;
+const fs = require('fs');
+const path = require('path');
+const Protobuf = require('pbf');
+const VectorTile = require('vector-tile').VectorTile;
+const classifyRings = require('../../../js/util/classify_rings');
 
 // Load a fill feature from fixture tile.
-var vt = new VectorTile(new Protobuf(new Uint8Array(fs.readFileSync(path.join(__dirname, '/../../fixtures/mbsv5-6-18-23.vector.pbf')))));
-var feature = vt.layers.water.feature(0);
+const vt = new VectorTile(new Protobuf(fs.readFileSync(path.join(__dirname, '/../../fixtures/mbsv5-6-18-23.vector.pbf'))));
+const feature = vt.layers.water.feature(0);
 
-test('classifyRings', function(assert) {
-    var geometry;
-    var classified;
+test('classifyRings', (assert) => {
+    let geometry;
+    let classified;
 
     geometry = [
         [
@@ -77,10 +77,10 @@ test('classifyRings', function(assert) {
     assert.end();
 });
 
-test('classifyRings + maxRings', function(t) {
+test('classifyRings + maxRings', (t) => {
 
     function createGeometry(options) {
-        var geometry = [
+        const geometry = [
             // Outer ring, area = 3200
             [ {x:0, y:0}, {x:0, y:40}, {x:40, y:40}, {x:40, y:0}, {x:0, y:0} ],
             // Inner ring, area = 100
@@ -97,8 +97,8 @@ test('classifyRings + maxRings', function(t) {
     }
 
 
-    t.test('maxRings=undefined', function(t) {
-        var geometry = sortRings(classifyRings(createGeometry()));
+    t.test('maxRings=undefined', (t) => {
+        const geometry = sortRings(classifyRings(createGeometry()));
         t.equal(geometry.length, 1);
         t.equal(geometry[0].length, 3);
         t.equal(geometry[0][0].area, 3200);
@@ -107,8 +107,8 @@ test('classifyRings + maxRings', function(t) {
         t.end();
     });
 
-    t.test('maxRings=2', function(t) {
-        var geometry = sortRings(classifyRings(createGeometry(), 2));
+    t.test('maxRings=2', (t) => {
+        const geometry = sortRings(classifyRings(createGeometry(), 2));
         t.equal(geometry.length, 1);
         t.equal(geometry[0].length, 2);
         t.equal(geometry[0][0].area, 3200);
@@ -116,8 +116,8 @@ test('classifyRings + maxRings', function(t) {
         t.end();
     });
 
-    t.test('maxRings=2, reversed geometry', function(t) {
-        var geometry = sortRings(classifyRings(createGeometry({reverse: true}), 2));
+    t.test('maxRings=2, reversed geometry', (t) => {
+        const geometry = sortRings(classifyRings(createGeometry({reverse: true}), 2));
         t.equal(geometry.length, 1);
         t.equal(geometry[0].length, 2);
         t.equal(geometry[0][0].area, 3200);
@@ -125,13 +125,13 @@ test('classifyRings + maxRings', function(t) {
         t.end();
     });
 
-    t.test('maxRings=5, geometry from fixture', function(t) {
-        var geometry = sortRings(classifyRings(feature.loadGeometry(), 5));
+    t.test('maxRings=5, geometry from fixture', (t) => {
+        const geometry = sortRings(classifyRings(feature.loadGeometry(), 5));
         t.equal(geometry.length, 2);
         t.equal(geometry[0].length, 1);
         t.equal(geometry[1].length, 5);
 
-        var areas = geometry[1].map(function(ring) { return ring.area; });
+        const areas = geometry[1].map((ring) => { return ring.area; });
         t.deepEqual(areas, [2763951, 21600, 8298, 4758, 3411]);
         t.end();
     });
@@ -140,7 +140,7 @@ test('classifyRings + maxRings', function(t) {
 });
 
 function sortRings(geometry) {
-    for (var i = 0; i < geometry.length; i++) {
+    for (let i = 0; i < geometry.length; i++) {
         geometry[i] = geometry[i].sort(compareAreas);
     }
     return geometry;

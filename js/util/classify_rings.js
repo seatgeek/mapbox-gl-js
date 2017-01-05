@@ -1,19 +1,20 @@
 'use strict';
 
-var quickselect = require('quickselect');
+const quickselect = require('quickselect');
+const calculateSignedArea = require('./util').calculateSignedArea;
 
 // classifies an array of rings into polygons with outer rings and holes
 module.exports = function classifyRings(rings, maxRings) {
-    var len = rings.length;
+    const len = rings.length;
 
     if (len <= 1) return [rings];
 
-    var polygons = [],
-        polygon,
+    const polygons = [];
+    let polygon,
         ccw;
 
-    for (var i = 0; i < len; i++) {
-        var area = calculateSignedArea(rings[i]);
+    for (let i = 0; i < len; i++) {
+        const area = calculateSignedArea(rings[i]);
         if (area === 0) continue;
 
         rings[i].area = Math.abs(area);
@@ -33,10 +34,10 @@ module.exports = function classifyRings(rings, maxRings) {
     // Earcut performance degrages with the # of rings in a polygon. For this
     // reason, we limit strip out all but the `maxRings` largest rings.
     if (maxRings > 1) {
-        for (var j = 0; j < polygons.length; j++) {
+        for (let j = 0; j < polygons.length; j++) {
             if (polygons[j].length <= maxRings) continue;
-            quickselect(polygons[j], maxRings, 1, polygon.length - 1, compareAreas);
-            polygons[j] = polygon.slice(0, maxRings);
+            quickselect(polygons[j], maxRings, 1, polygons[j].length - 1, compareAreas);
+            polygons[j] = polygons[j].slice(0, maxRings);
         }
     }
 
@@ -45,14 +46,4 @@ module.exports = function classifyRings(rings, maxRings) {
 
 function compareAreas(a, b) {
     return b.area - a.area;
-}
-
-function calculateSignedArea(ring) {
-    var sum = 0;
-    for (var i = 0, len = ring.length, j = len - 1, p1, p2; i < len; j = i++) {
-        p1 = ring[i];
-        p2 = ring[j];
-        sum += (p2.x - p1.x) * (p1.y + p2.y);
-    }
-    return sum;
 }

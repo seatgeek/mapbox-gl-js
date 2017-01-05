@@ -1,9 +1,9 @@
 'use strict';
 
-var test = require('tap').test;
-var resolveTokens = require('../../../js/util/token');
+const test = require('mapbox-gl-js-test').test;
+const resolveTokens = require('../../../js/util/token');
 
-test('token', function(t) {
+test('token', (t) => {
     t.equal('literal', resolveTokens({name:'14th St NW'}, 'literal'));
     t.equal('14th St NW', resolveTokens({name:'14th St NW'}, '{name}'));
     t.equal('', resolveTokens({text:'14th St NW'}, '{name}'));

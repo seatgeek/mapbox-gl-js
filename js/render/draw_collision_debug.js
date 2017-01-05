@@ -2,21 +2,18 @@
 
 module.exports = drawCollisionDebug;
 
-function drawCollisionDebug(painter, source, layer, coords) {
-    var gl = painter.gl;
+function drawCollisionDebug(painter, sourceCache, layer, coords) {
+    const gl = painter.gl;
     gl.enable(gl.STENCIL_TEST);
-    var program = painter.useProgram('collisionbox');
+    const program = painter.useProgram('collisionBox');
 
-    for (var i = 0; i < coords.length; i++) {
-        var coord = coords[i];
-        var tile = source.getTile(coord);
-        var bucket = tile.getBucket(layer);
+    for (let i = 0; i < coords.length; i++) {
+        const coord = coords[i];
+        const tile = sourceCache.getTile(coord);
+        const bucket = tile.getBucket(layer);
         if (!bucket) continue;
-        var bufferGroups = bucket.bufferGroups.collisionBox;
-
-        if (!bufferGroups || !bufferGroups.length) continue;
-        var group = bufferGroups[0];
-        if (group.layout.vertex.length === 0) continue;
+        const buffers = bucket.buffers.collisionBox;
+        if (!buffers) continue;
 
         gl.uniformMatrix4fv(program.u_matrix, false, coord.posMatrix);
 
@@ -27,7 +24,9 @@ function drawCollisionDebug(painter, source, layer, coords) {
         gl.uniform1f(program.u_zoom, painter.transform.zoom * 10);
         gl.uniform1f(program.u_maxzoom, (tile.coord.z + 1) * 10);
 
-        group.vaos[layer.id].bind(gl, program, group.layout.vertex);
-        gl.drawArrays(gl.LINES, 0, group.layout.vertex.length);
+        for (const segment of buffers.segments) {
+            segment.vaos[layer.id].bind(gl, program, buffers.layoutVertexBuffer, buffers.elementBuffer, null, segment.vertexOffset);
+            gl.drawElements(gl.LINES, segment.primitiveLength * 2, gl.UNSIGNED_SHORT, segment.primitiveOffset * 2 * 2);
+        }
     }
 }

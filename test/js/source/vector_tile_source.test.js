@@ -1,45 +1,44 @@
 'use strict';
 
-var test = require('tap').test;
-var st = require('st');
-var http = require('http');
-var path = require('path');
-var VectorTileSource = require('../../../js/source/vector_tile_source');
-var TileCoord = require('../../../js/source/tile_coord');
-
-var server = http.createServer(st({path: path.join(__dirname, '/../../fixtures')}));
+const test = require('mapbox-gl-js-test').test;
+const VectorTileSource = require('../../../js/source/vector_tile_source');
+const TileCoord = require('../../../js/source/tile_coord');
+const window = require('../../../js/util/window');
+const Evented = require('../../../js/util/evented');
 
 function createSource(options) {
-    var source = new VectorTileSource(options);
-
-    source.on('error', function(e) {
-        throw e.error;
+    const source = new VectorTileSource('id', options, { send: function() {} }, options.eventedParent);
+    source.onAdd({
+        transform: { angle: 0, pitch: 0, showCollisionBoxes: false }
     });
 
-    source.dispatcher = { send: function() {} };
-
-    source.map = {
-        transform: { angle: 0, pitch: 0, showCollisionBoxes: false }
-    };
+    source.on('error', (e) => {
+        throw e.error;
+    });
 
     return source;
 }
 
-test('VectorTileSource', function(t) {
-    t.test('before', function(t) {
-        server.listen(2900, t.end);
+test('VectorTileSource', (t) => {
+    t.beforeEach((callback) => {
+        window.useFakeXMLHttpRequest();
+        callback();
     });
 
-    t.test('can be constructed from TileJSON', function(t) {
-        var source = createSource({
+    t.afterEach((callback) => {
+        window.restore();
+        callback();
+    });
+
+    t.test('can be constructed from TileJSON', (t) => {
+        const source = createSource({
             minzoom: 1,
             maxzoom: 10,
             attribution: "Mapbox",
             tiles: ["http://example.com/{z}/{x}/{y}.png"]
         });
 
-        source.on('load', function() {
-            t.ok(source.loaded());
+        source.on('source.load', () => {
             t.deepEqual(source.tiles, ["http://example.com/{z}/{x}/{y}.png"]);
             t.deepEqual(source.minzoom, 1);
             t.deepEqual(source.maxzoom, 10);
@@ -48,37 +47,39 @@ test('VectorTileSource', function(t) {
         });
     });
 
-    t.test('can be constructed from a TileJSON URL', function(t) {
-        var source = createSource({
-            url: "http://localhost:2900/source.json"
-        });
+    t.test('can be constructed from a TileJSON URL', (t) => {
+        window.server.respondWith('/source.json', JSON.stringify(require('../../fixtures/source')));
 
-        source.on('load', function() {
-            t.ok(source.loaded());
+        const source = createSource({ url: "/source.json" });
+
+        source.on('source.load', () => {
             t.deepEqual(source.tiles, ["http://example.com/{z}/{x}/{y}.png"]);
             t.deepEqual(source.minzoom, 1);
             t.deepEqual(source.maxzoom, 10);
             t.deepEqual(source.attribution, "Mapbox");
             t.end();
         });
+
+        window.server.respond();
     });
 
-    t.test('ignores reload before loaded', function(t) {
-        var source = createSource({
-            url: "http://localhost:2900/source.json"
-        });
-
-        t.doesNotThrow(function() {
-            source.reload();
-        }, null, 'reload ignored gracefully');
-
-        source.on('load', function() {
-            t.end();
-        });
+    t.test('fires "data" event', (t) => {
+        window.server.respondWith('/source.json', JSON.stringify(require('../../fixtures/source')));
+        const source = createSource({ url: "/source.json" });
+        source.on('data', t.end);
+        window.server.respond();
     });
 
-    t.test('serialize URL', function(t) {
-        var source = createSource({
+    t.test('fires "dataloading" event', (t) => {
+        window.server.respondWith('/source.json', JSON.stringify(require('../../fixtures/source')));
+        const evented = new Evented();
+        evented.on('dataloading', t.end);
+        createSource({ url: "/source.json", eventedParent: evented });
+        window.server.respond();
+    });
+
+    t.test('serialize URL', (t) => {
+        const source = createSource({
             url: "http://localhost:2900/source.json"
         });
         t.deepEqual(source.serialize(), {
@@ -88,8 +89,8 @@ test('VectorTileSource', function(t) {
         t.end();
     });
 
-    t.test('serialize TileJSON', function(t) {
-        var source = createSource({
+    t.test('serialize TileJSON', (t) => {
+        const source = createSource({
             minzoom: 1,
             maxzoom: 10,
             attribution: "Mapbox",
@@ -101,27 +102,13 @@ test('VectorTileSource', function(t) {
             maxzoom: 10,
             attribution: "Mapbox",
             tiles: ["http://example.com/{z}/{x}/{y}.png"]
-        });
-        t.end();
-    });
-
-    t.test('queryRenderedFeatures', function(t) {
-        t.test('returns an empty object before loaded', function(t) {
-            var source = createSource({
-                minzoom: 1,
-                maxzoom: 10,
-                attribution: "Mapbox",
-                tiles: ["http://example.com/{z}/{x}/{y}.png"]
-            });
-            t.deepEqual(source.queryRenderedFeatures(), {});
-            t.end();
         });
         t.end();
     });
 
     function testScheme(scheme, expectedURL) {
-        t.test('scheme "' + scheme + '"', function(t) {
-            var source = createSource({
+        t.test(`scheme "${scheme}"`, (t) => {
+            const source = createSource({
                 minzoom: 1,
                 maxzoom: 10,
                 attribution: "Mapbox",
@@ -130,13 +117,13 @@ test('VectorTileSource', function(t) {
             });
 
             source.dispatcher.send = function(type, params) {
-                t.equal(type, 'load tile');
+                t.equal(type, 'loadTile');
                 t.equal(expectedURL, params.url);
                 t.end();
             };
 
-            source.on('load', function() {
-                source._loadTile({coord: new TileCoord(10, 5, 5, 0)});
+            source.on('source.load', () => {
+                source.loadTile({coord: new TileCoord(10, 5, 5, 0)}, () => {});
             });
         });
     }
@@ -144,8 +131,33 @@ test('VectorTileSource', function(t) {
     testScheme('xyz', 'http://example.com/10/5/5.png');
     testScheme('tms', 'http://example.com/10/5/1018.png');
 
-    t.test('after', function(t) {
-        server.close(t.end);
+    t.test('reloads a loading tile properly', (t) => {
+        const source = createSource({
+            tiles: ["http://example.com/{z}/{x}/{y}.png"]
+        });
+        const events = [];
+        source.dispatcher.send = function(type, params, cb) {
+            events.push(type);
+            setTimeout(cb, 0);
+            return 1;
+        };
+
+        source.on('source.load', () => {
+            const tile = {
+                coord: new TileCoord(10, 5, 5, 0),
+                state: 'loading',
+                loadVectorData: function () {
+                    this.state = 'loaded';
+                    events.push('tileLoaded');
+                }
+            };
+            source.loadTile(tile, () => {});
+            t.equal(tile.state, 'loading');
+            source.loadTile(tile, () => {
+                t.same(events, ['loadTile', 'tileLoaded', 'reloadTile', 'tileLoaded']);
+                t.end();
+            });
+        });
     });
 
     t.end();
