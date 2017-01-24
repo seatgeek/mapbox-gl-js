@@ -625,6 +625,72 @@ test('Style#addLayer', (t) => {
         });
     });
 
+    t.test('#3895 reloads source (instead of clearing) if adding this layer with the same type, immediately after removing it', (t) => {
+        const style = new Style(util.extend(createStyleJSON(), {
+            "sources": {
+                "mapbox": {
+                    "type": "vector",
+                    "tiles": []
+                }
+            },
+            layers: [{
+                "id": "my-layer",
+                "type": "symbol",
+                "source": "mapbox",
+                "source-layer": "boxmap",
+                "filter": ["==", "id", 0]
+            }]
+        }));
+
+        const layer = {
+            "id": "my-layer",
+            "type": "symbol",
+            "source": "mapbox",
+            "source-layer": "boxmap"
+        };
+
+        style.on('style.load', () => {
+            style.sourceCaches['mapbox'].reload = t.end;
+            style.sourceCaches['mapbox'].clearTiles = t.fail;
+            style.removeLayer('my-layer');
+            style.addLayer(layer);
+            style.update();
+        });
+    });
+
+    t.test('clears source (instead of reloading) if adding this layer with a different type, immediately after removing it', (t) => {
+        const style = new Style(util.extend(createStyleJSON(), {
+            "sources": {
+                "mapbox": {
+                    "type": "vector",
+                    "tiles": []
+                }
+            },
+            layers: [{
+                "id": "my-layer",
+                "type": "symbol",
+                "source": "mapbox",
+                "source-layer": "boxmap",
+                "filter": ["==", "id", 0]
+            }]
+        }));
+
+        const layer = {
+            "id": "my-layer",
+            "type": "circle",
+            "source": "mapbox",
+            "source-layer": "boxmap"
+        };
+
+        style.on('style.load', () => {
+            style.sourceCaches['mapbox'].reload = t.fail;
+            style.sourceCaches['mapbox'].clearTiles = t.end;
+            style.removeLayer('my-layer');
+            style.addLayer(layer);
+            style.update();
+        });
+    });
+
     t.test('fires "data" event', (t) => {
         const style = new Style(createStyleJSON()),
             layer = {id: 'background', type: 'background'};
@@ -690,6 +756,33 @@ test('Style#addLayer', (t) => {
             t.deepEqual(style._order, ['c', 'a', 'b']);
             t.end();
         });
+    });
+
+    t.test('fires an error on non-existant source layer', (t) => {
+        const style = new Style(util.extend(createStyleJSON(), {
+            sources: {
+                dummy: {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                }
+            }
+        }));
+
+        const layer = {
+            id: 'dummy',
+            source: 'dummy',
+            type: 'background',
+            'source-layer': 'dummy'
+        };
+
+        style.on('style.load', () => {
+            style.on('error', ({ error }) => {
+                t.match(error.message, /does not exist on source/);
+                t.end();
+            });
+            style.addLayer(layer);
+        });
+
     });
 
     t.end();
@@ -1217,7 +1310,7 @@ test('Style defers expensive methods', (t) => {
 test('Style#query*Features', (t) => {
 
     // These tests only cover filter validation. Most tests for these methods
-    // live in mapbox-gl-test-suite.
+    // live in the integration tests.
 
     let style;
     let onError;
