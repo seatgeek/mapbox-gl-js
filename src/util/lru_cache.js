@@ -99,12 +99,14 @@ class LRUCache<T> {
      * @returns {*} the data, or null if it isn't found
      * @private
      */
-    get(key: string): ?T {
+    get(key: string, noDelete: bool): ?T {
         if (!this.has(key)) { return null; }
 
         const data = this.data[key];
 
-        delete this.data[key];
+        if (!noDelete) {
+            delete this.data[key];
+        }
         this.order.splice(this.order.indexOf(key), 1);
 
         return data;
