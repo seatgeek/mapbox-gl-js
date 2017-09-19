@@ -73,8 +73,41 @@ function resample(line, offset, spacing, angleWindowSize, maxAngle, labelLength,
         const a = line[i],
             b = line[i + 1];
 
-        var anchor = new Anchor((a.x + b.x) / 2 , (a.y + b.y) / 2, b.angleTo(a), i)._round();
-        anchors.push(anchor);
+        const segmentDist = a.dist(b),
+            angle = b.angleTo(a);
+
+        while (markedDistance + spacing < distance + segmentDist) {
+            markedDistance += spacing;
+
+            const t = (markedDistance - distance) / segmentDist,
+                x = interpolate(a.x, b.x, t),
+                y = interpolate(a.y, b.y, t);
+
+            // Check that the point is within the tile boundaries and that
+            // the label would fit before the beginning and end of the line
+            // if placed at this point.
+            if (x >= 0 && x < tileExtent && y >= 0 && y < tileExtent &&
+                    markedDistance - halfLabelLength >= 0 &&
+                    markedDistance + halfLabelLength <= lineLength) {
+                const anchor = new Anchor(x, y, angle, i);
+                anchor._round();
+
+                if (!angleWindowSize || checkMaxAngle(line, anchor, labelLength, angleWindowSize, maxAngle)) {
+                    anchors.push(anchor);
+                }
+            }
+        }
+
+        distance += segmentDist;
+    }
+
+    if (!placeAtMiddle && !anchors.length && !isLineContinued) {
+        // The first attempt at finding anchors at which labels can be placed failed.
+        // Try again, but this time just try placing one anchor at the middle of the line.
+        // This has the most effect for short lines in overscaled tiles, since the
+        // initial offset used in overscaled tiles is calculated to align labels with positions in
+        // parent tiles instead of placing the label as close to the beginning as possible.
+        anchors = resample(line, distance / 2, spacing, angleWindowSize, maxAngle, labelLength, isLineContinued, true, tileExtent);
     }
 
     return anchors;
