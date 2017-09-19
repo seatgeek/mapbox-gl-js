@@ -639,7 +639,7 @@ class SymbolBucket implements Bucket {
         };
 
         if (symbolPlacement === 'line') {
-            for (const line of feature.geometry) {
+            for (const line of clipLine(feature.geometry, 0, 0, EXTENT, EXTENT)) {
                 const anchors = getAnchors(
                     line,
                     symbolMinDistance,
