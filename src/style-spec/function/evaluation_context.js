@@ -105,7 +105,7 @@ module.exports = () => ({
             }
         }
         const expected = jsTypes[expectedType].kind;
-        throw new RuntimeError(`Expected value to be of type ${expected}, but found ${this.typeOf(value)} instead.`);
+        // throw new RuntimeError(`Expected value to be of type ${expected}, but found ${this.typeOf(value)} instead.`);
     },
 
     asArray: function (value: Value, expectedType: ArrayType) {
@@ -113,7 +113,7 @@ module.exports = () => ({
         const typeError = checkSubtype(expectedType, type);
 
         if (typeError) {
-            throw new RuntimeError(`Expected value to be of type ${toString(expectedType)}, but found ${toString(type)} instead.`);
+            // throw new RuntimeError(`Expected value to be of type ${toString(expectedType)}, but found ${toString(type)} instead.`);
         }
 
         return value;
