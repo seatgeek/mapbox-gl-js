@@ -1,5 +1,4 @@
 {
-  "expectExpressionType": null,
   "expression": [
     "match",
     ["string", ["get", "x"]],
@@ -19,7 +18,7 @@
       "result": "success",
       "isFeatureConstant": false,
       "isZoomConstant": true,
-      "type": "String"
+      "type": "string"
     },
     "outputs": ["match", "match", "match", "match", "otherwise"]
   }

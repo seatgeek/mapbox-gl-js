@@ -73,13 +73,14 @@ class CircleBucket implements Bucket {
 
         this.layoutVertexArray = new LayoutVertexArrayType(options.layoutVertexArray);
         this.indexArray = new TriangleIndexArray(options.indexArray);
-        this.programConfigurations = new ProgramConfigurationSet(circleInterface, options.layers, options.zoom, options.programConfigurations);
         this.segments = new SegmentVector(options.segments);
+        this.programConfigurations = new ProgramConfigurationSet(
+            this.constructor.programInterface, options.layers, options.zoom, options.programConfigurations);
     }
 
     populate(features: Array<IndexedFeature>, options: PopulateParameters) {
         for (const {feature, index, sourceLayerIndex} of features) {
-            if (this.layers[0].filter(feature)) {
+            if (this.layers[0]._featureFilter({zoom: this.zoom}, feature)) {
                 const geometry = loadGeometry(feature);
                 this.addFeature(feature, geometry);
                 options.featureIndex.insert(feature, geometry, index, sourceLayerIndex, this.index);

@@ -16,10 +16,10 @@ function restore(): Window {
     }
 
     // Create new window and inject into module.exports
-    const window = jsdom.jsdom(undefined, {
+    const { window } = new jsdom.JSDOM('', {
         // Send jsdom console output to the node console object.
-        virtualConsole: jsdom.createVirtualConsole().sendTo(console)
-    }).defaultView;
+        virtualConsole: new jsdom.VirtualConsole().sendTo(console)
+    });
 
     window.devicePixelRatio = 1;
 
@@ -56,7 +56,7 @@ function restore(): Window {
     window.restore = restore;
 
     window.ImageData = window.ImageData || function() { return false; };
-
+    window.ImageBitmap = window.ImageBitmap || function() { return false; };
     util.extend(module.exports, window);
 
     return window;

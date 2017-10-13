@@ -5,18 +5,17 @@ const FillBucket = require('../../data/bucket/fill_bucket');
 const {multiPolygonIntersectsMultiPolygon} = require('../../util/intersection_tests');
 const {translateDistance, translate} = require('../query_utils');
 
-import type {Feature} from '../../style-spec/function';
-import type {GlobalProperties} from '../style_layer';
+import type {Feature, GlobalProperties} from '../../style-spec/expression';
 import type {BucketParameters} from '../../data/bucket';
 import type Point from '@mapbox/point-geometry';
 
 class FillStyleLayer extends StyleLayer {
 
-    getPaintValue(name: string, globalProperties?: GlobalProperties, feature?: Feature) {
+    getPaintValue(name: string, globals: GlobalProperties, feature?: Feature) {
         if (name === 'fill-outline-color') {
             // Special-case handling of undefined fill-outline-color values
             if (this.getPaintProperty('fill-outline-color') === undefined) {
-                return super.getPaintValue('fill-color', globalProperties, feature);
+                return super.getPaintValue('fill-color', globals, feature);
             }
 
             // Handle transitions from fill-outline-color: undefined
@@ -29,22 +28,14 @@ class FillStyleLayer extends StyleLayer {
                 );
 
                 if (!declaredValue) {
-                    return super.getPaintValue('fill-color', globalProperties, feature);
+                    return super.getPaintValue('fill-color', globals, feature);
                 }
 
                 transition = transition.oldTransition;
             }
         }
 
-        return super.getPaintValue(name, globalProperties, feature);
-    }
-
-    getPaintValueStopZoomLevels(name: string) {
-        if (name === 'fill-outline-color' && this.getPaintProperty('fill-outline-color') === undefined) {
-            return super.getPaintValueStopZoomLevels('fill-color');
-        } else {
-            return super.getPaintValueStopZoomLevels(name);
-        }
+        return super.getPaintValue(name, globals, feature);
     }
 
     getPaintInterpolationFactor(name: string, ...args: *) {
@@ -73,6 +64,11 @@ class FillStyleLayer extends StyleLayer {
 
     createBucket(parameters: BucketParameters) {
         return new FillBucket(parameters);
+    }
+
+    isOpacityZero(zoom: number) {
+        return this.isPaintValueFeatureConstant('fill-opacity') &&
+            this.getPaintValue('fill-opacity', { zoom: zoom }) === 0;
     }
 
     queryRadius(): number {

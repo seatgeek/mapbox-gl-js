@@ -1,5 +1,4 @@
 {
-  "expectExpressionType": null,
   "expression": ["array", ["literal", [1, 2, 3]]],
   "inputs": [[{}, {}]],
   "expected": {
@@ -7,7 +6,7 @@
       "result": "success",
       "isFeatureConstant": true,
       "isZoomConstant": true,
-      "type": "Array"
+      "type": "array"
     },
     "outputs": [[1, 2, 3]]
   }

@@ -1,5 +1,4 @@
 {
-  "expectExpressionType": null,
   "expression": [
     "number",
     ["curve", ["exponential", 2], ["number", ["get", "x"]], 1, 2]
@@ -14,7 +13,7 @@
       "result": "success",
       "isFeatureConstant": false,
       "isZoomConstant": true,
-      "type": "Number"
+      "type": "number"
     },
     "outputs": [2, 2, 2]
   }

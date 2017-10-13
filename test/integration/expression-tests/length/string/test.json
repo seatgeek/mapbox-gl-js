@@ -1,5 +1,4 @@
 {
-  "expectExpressionType": null,
   "expression": ["length", ["string", ["get", "x"]]],
   "inputs": [[{}, {"properties": {"x": "a string"}}]],
   "expected": {
@@ -7,7 +6,7 @@
       "result": "success",
       "isFeatureConstant": false,
       "isZoomConstant": true,
-      "type": "Number"
+      "type": "number"
     },
     "outputs": [8]
   }

@@ -1,5 +1,4 @@
 {
-  "expectExpressionType": null,
   "expression": ["properties"],
   "inputs": [[{}, {"properties": {"x": 5}}]],
   "expected": {
@@ -7,7 +6,7 @@
       "result": "success",
       "isFeatureConstant": false,
       "isZoomConstant": true,
-      "type": "Object"
+      "type": "object"
     },
     "outputs": [{"x": 5}]
   }

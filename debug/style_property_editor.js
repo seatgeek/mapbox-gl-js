@@ -1,6 +1,8 @@
-const createFunction = require('../src/style-spec/function/index');
+const convertFunction = require('../src/style-spec/function/convert');
+const {isFunction} = require('../src/style-spec/function');
 const util = require('../src/util/util');
 const spec = require('../src/style-spec/reference/v8.json');
+const stringify = require('json-stringify-pretty-compact');
 
 class StylePropertyEditor extends React.Component {
     constructor(props) {
@@ -14,14 +16,20 @@ class StylePropertyEditor extends React.Component {
         this.map = props.map;
 
         const layers = this.map.getStyle().layers;
-
+        const layer = this.props.layer;
+        const property = this.props.property;
         this.state = {
-            layers: layers,
-            layer: '',
-            property: '',
+            layers,
+            layer,
+            property,
             propertySpec: null,
             propertyValue: ''
         };
+
+        if (layer && property) {
+            const l = layers.find(({id}) => id === layer);
+            util.extend(this.state, getPropertyValueAndSpec(l, property));
+        }
     }
 
     render() {
@@ -40,8 +48,13 @@ class StylePropertyEditor extends React.Component {
         if (this.state.propertySpec && this.state.propertyValue) {
             try {
                 const input = JSON.parse(this.state.propertyValue);
-                const compiled = createFunction(input, this.state.propertySpec);
-                converted = <pre>{JSON.stringify(compiled.rawExpression, null, 2)}</pre>;
+
+                if (!isFunction(input)) {
+                    converted = input;
+                } else {
+                    converted = convertFunction(input, this.state.propertySpec);
+                }
+                converted = <pre>{stringify(converted, null, 2)}</pre>;
             } catch (e) {
                 converted = e.message;
             }
@@ -99,15 +112,11 @@ class StylePropertyEditor extends React.Component {
 
     onPropertyChange(event) {
         const property = event.target.value;
-        const [type, key] = property.split('.');
         const layer = this.state.layers.find(layer => layer.id === this.state.layer);
-        const propertyValue = JSON.stringify(layer[type][key], null, 2);
-        const propertySpec = spec[`${type}_${layer.type}`][key];
-        return this.setState(util.extend({}, this.state, {
-            property,
-            propertyValue,
-            propertySpec
-        }));
+        return this.setState(util.extend({}, this.state,
+            { property },
+            getPropertyValueAndSpec(layer, property)
+        ));
     }
 
     onEdit(event) {
@@ -142,6 +151,13 @@ class StylePropertyEditor extends React.Component {
         });
         this.map.setStyle(style);
     }
+}
+
+function getPropertyValueAndSpec (layer, property) {
+    const [type, key] = property.split('.');
+    const propertyValue = JSON.stringify(layer[type][key], null, 2);
+    const propertySpec = spec[`${type}_${layer.type}`][key];
+    return {propertyValue, propertySpec};
 }
 
 module.exports = StylePropertyEditor;

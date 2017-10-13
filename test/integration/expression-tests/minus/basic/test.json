@@ -1,14 +1,13 @@
 {
-  "expectExpressionType": null,
   "expression": ["-", 5, 7],
   "inputs": [[{}, {}]],
   "expected": {
+    "outputs": [-2],
     "compiled": {
       "result": "success",
-      "isFeatureConstant": true,
       "isZoomConstant": true,
-      "type": "Number"
-    },
-    "outputs": [-2]
+      "isFeatureConstant": true,
+      "type": "number"
+    }
   }
 }

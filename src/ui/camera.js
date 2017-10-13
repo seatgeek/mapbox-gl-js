@@ -665,6 +665,8 @@ class Camera extends Evented {
      *     It does not correspond to a fixed physical distance, but varies by zoom level.
      * @param {number} [options.screenSpeed] The average speed of the animation measured in screenfuls
      *     per second, assuming a linear timing curve. If `options.speed` is specified, this option is ignored.
+     * @param {number} [options.maxDuration] The animation's maximum duration, measured in milliseconds.
+     *     If duration exceeds maximum duration, it resets to 0.
      * @param eventData Additional properties to be added to event objects of events triggered by this method.
      * @fires movestart
      * @fires zoomstart
@@ -785,7 +787,7 @@ class Camera extends Evented {
         let S = (r(1) - r0) / rho;
 
         // When u₀ = u₁, the optimal path doesn’t require both ascent and descent.
-        if (Math.abs(u1) < 0.000001 || isNaN(S)) {
+        if (Math.abs(u1) < 0.000001 || !isFinite(S)) {
             // Perform a more or less instantaneous transition if the path is too short.
             if (Math.abs(w0 - w1) < 0.000001) return this.easeTo(options, eventData);
 
@@ -801,6 +803,10 @@ class Camera extends Evented {
         } else {
             const V = 'screenSpeed' in options ? +options.screenSpeed / rho : +options.speed;
             options.duration = 1000 * S / V;
+        }
+
+        if (options.maxDuration && options.duration > options.maxDuration) {
+            options.duration = 0;
         }
 
         this.zooming = true;

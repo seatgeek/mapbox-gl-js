@@ -1,5 +1,4 @@
 {
-  "expectExpressionType": null,
   "expression": [
     "to-rgba",
     ["curve", ["exponential", 1], ["get", "x"], 1, "red", 11, ["get", "color"]]
@@ -15,7 +14,7 @@
       "result": "success",
       "isFeatureConstant": false,
       "isZoomConstant": true,
-      "type": "Array<Number, 4>"
+      "type": "array<number, 4>"
     },
     "outputs": [
       [1, 0, 0, 1],

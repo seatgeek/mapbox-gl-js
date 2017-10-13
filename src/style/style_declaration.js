@@ -1,10 +1,42 @@
 // @flow
 
-const createFunction = require('../style-spec/function');
+const parseColor = require('../style-spec/util/parse_color');
+const {isFunction, createFunction} = require('../style-spec/function');
+const {isExpression, createExpression} = require('../style-spec/expression');
 const util = require('../util/util');
-const Curve = require('../style-spec/function/definitions/curve');
+const Curve = require('../style-spec/expression/definitions/curve');
 
-import type {StyleFunction, Feature} from '../style-spec/function';
+import type {StyleDeclarationExpression, Feature, GlobalProperties} from '../style-spec/expression';
+
+function normalizeToExpression(parameters, propertySpec, name): StyleDeclarationExpression {
+    if (isFunction(parameters)) {
+        return createFunction(parameters, propertySpec, name);
+    } else if (isExpression(parameters)) {
+        const expression = createExpression(parameters, propertySpec, 'property');
+        if (expression.result !== 'success') {
+            // this should have been caught in validation
+            throw new Error(expression.errors.map(err => `${err.key}: ${err.message}`).join(', '));
+        }
+
+        if (expression.context === 'property') {
+            return expression;
+        } else {
+            throw new Error(`Incorrect expression context ${expression.context}`);
+        }
+    } else {
+        if (typeof parameters === 'string' && propertySpec.type === 'color') {
+            parameters = parseColor(parameters);
+        }
+
+        return {
+            result: 'success',
+            context: 'property',
+            isFeatureConstant: true,
+            isZoomConstant: true,
+            evaluate() { return parameters; }
+        };
+    }
+}
 
 /**
  * A style property declaration
@@ -12,38 +44,22 @@ import type {StyleFunction, Feature} from '../style-spec/function';
  */
 class StyleDeclaration {
     value: any;
-    isFunction: boolean;
-    isFeatureConstant: boolean;
-    isZoomConstant: boolean;
     json: mixed;
     minimum: number;
-    function: StyleFunction;
-    stopZoomLevels: Array<number>;
-    _zoomCurve: ?Curve;
+    expression: StyleDeclarationExpression;
 
-    constructor(reference: any, value: any) {
+    constructor(reference: any, value: any, name: string) {
         this.value = util.clone(value);
-        this.isFunction = createFunction.isFunctionDefinition(value);
 
         // immutable representation of value. used for comparison
         this.json = JSON.stringify(this.value);
 
         this.minimum = reference.minimum;
-        this.function = createFunction(this.value, reference);
-        this.isFeatureConstant = this.function.isFeatureConstant;
-        this.isZoomConstant = this.function.isZoomConstant;
-
-        if (!this.isZoomConstant) {
-            this._zoomCurve = this.function.zoomCurve;
-            this.stopZoomLevels = [];
-            for (const stop of this.function.zoomCurve.stops) {
-                this.stopZoomLevels.push(stop[0]);
-            }
-        }
+        this.expression = normalizeToExpression(this.value, reference, name);
     }
 
-    calculate(globalProperties: {+zoom?: number} = {}, feature?: Feature) {
-        const value = this.function(globalProperties, feature);
+    calculate(globals: GlobalProperties, feature?: Feature) {
+        const value = this.expression.evaluate(globals, feature);
         if (this.minimum !== undefined && value < this.minimum) {
             return this.minimum;
         }
@@ -53,18 +69,18 @@ class StyleDeclaration {
     /**
      * Calculate the interpolation factor for the given zoom stops and current
      * zoom level.
-     *
-     * Only valid for composite functions.
-     * @private
      */
     interpolationFactor(zoom: number, lower: number, upper: number) {
-        if (!this._zoomCurve) return 0;
-        return Curve.interpolationFactor(
-            this._zoomCurve.interpolation,
-            zoom,
-            lower,
-            upper
-        );
+        if (this.expression.isZoomConstant) {
+            return 0;
+        } else {
+            return Curve.interpolationFactor(
+                this.expression.interpolation,
+                zoom,
+                lower,
+                upper
+            );
+        }
     }
 }
 

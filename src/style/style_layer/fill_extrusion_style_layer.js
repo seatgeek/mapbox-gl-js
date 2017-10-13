@@ -5,15 +5,14 @@ const FillExtrusionBucket = require('../../data/bucket/fill_extrusion_bucket');
 const {multiPolygonIntersectsMultiPolygon} = require('../../util/intersection_tests');
 const {translateDistance, translate} = require('../query_utils');
 
-import type {Feature} from '../../style-spec/function';
-import type {GlobalProperties} from '../style_layer';
+import type {Feature, GlobalProperties} from '../../style-spec/expression';
 import type {BucketParameters} from '../../data/bucket';
 import type Point from '@mapbox/point-geometry';
 
 class FillExtrusionStyleLayer extends StyleLayer {
 
-    getPaintValue(name: string, globalProperties?: GlobalProperties, feature?: Feature) {
-        const value = super.getPaintValue(name, globalProperties, feature);
+    getPaintValue(name: string, globals: GlobalProperties, feature?: Feature) {
+        const value = super.getPaintValue(name, globals, feature);
         if (name === 'fill-extrusion-color' && value) {
             value[3] = 1;
         }
@@ -22,6 +21,10 @@ class FillExtrusionStyleLayer extends StyleLayer {
 
     createBucket(parameters: BucketParameters) {
         return new FillExtrusionBucket(parameters);
+    }
+
+    isOpacityZero(zoom: number) {
+        return this.getPaintValue('fill-extrusion-opacity', { zoom: zoom }) === 0;
     }
 
     queryRadius(): number {
@@ -43,6 +46,15 @@ class FillExtrusionStyleLayer extends StyleLayer {
 
     has3DPass() {
         return this.paint['fill-extrusion-opacity'] !== 0 && this.layout['visibility'] !== 'none';
+    }
+
+    resize(gl: WebGLRenderingContext) {
+        if (this.viewportFrame) {
+            const {texture, fbo} = this.viewportFrame;
+            gl.deleteTexture(texture);
+            gl.deleteFramebuffer(fbo);
+            this.viewportFrame = null;
+        }
     }
 }
 

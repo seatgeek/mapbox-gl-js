@@ -15,10 +15,12 @@ const {ProgramConfiguration} = require('../data/program_configuration');
 const shaders = require('../shaders');
 const Program = require('./program');
 const RenderTexture = require('./render_texture');
+const updateTileMasks = require('./tile_mask');
 
 const draw = {
     symbol: require('./draw_symbol'),
     circle: require('./draw_circle'),
+    heatmap: require('./draw_heatmap'),
     line: require('./draw_line'),
     fill: require('./draw_fill'),
     'fill-extrusion': require('./draw_fill_extrusion'),
@@ -33,6 +35,7 @@ import type TileCoord from '../source/tile_coord';
 import type Style from '../style/style';
 import type StyleLayer from '../style/style_layer';
 import type LineAtlas from './line_atlas';
+import type Texture from './texture';
 import type ImageManager from './image_manager';
 import type GlyphManager from './glyph_manager';
 
@@ -54,7 +57,7 @@ type PainterOptions = {
 class Painter {
     gl: WebGLRenderingContext;
     transform: Transform;
-    _tileTextures: { [number]: Array<WebGLTexture> };
+    _tileTextures: { [number]: Array<Texture> };
     frameHistory: FrameHistory;
     numSublayers: number;
     depthEpsilon: number;
@@ -63,8 +66,6 @@ class Painter {
     emptyProgramConfiguration: ProgramConfiguration;
     width: number;
     height: number;
-    viewportFrames: Array<RenderTexture>;
-    prerenderedFrames: { [string]: ?RenderTexture };
     depthRbo: WebGLRenderbuffer;
     depthRboAttached: boolean;
     _depthMask: boolean;
@@ -75,8 +76,11 @@ class Painter {
     debugVAO: VertexArrayObject;
     rasterBoundsBuffer: VertexBuffer;
     rasterBoundsVAO: VertexArrayObject;
+    viewportBuffer: VertexBuffer;
+    viewportVAO: VertexArrayObject;
     extTextureFilterAnisotropic: any;
     extTextureFilterAnisotropicMax: any;
+    extTextureHalfFloat: any;
     _tileClippingMaskIDs: { [number]: number };
     style: Style;
     options: PainterOptions;
@@ -95,8 +99,6 @@ class Painter {
         this.gl = gl;
         this.transform = transform;
         this._tileTextures = {};
-        this.prerenderedFrames = {};
-        this.viewportFrames = [];
 
         this.frameHistory = new FrameHistory();
 
@@ -124,11 +126,11 @@ class Painter {
         this.height = height * browser.devicePixelRatio;
         gl.viewport(0, 0, this.width, this.height);
 
-        for (const frame of this.viewportFrames) {
-            this.gl.deleteTexture(frame.texture);
-            this.gl.deleteFramebuffer(frame.fbo);
+        if (this.style) {
+            for (const layerId of this.style._order) {
+                this.style._layers[layerId].resize(gl);
+            }
         }
-        this.viewportFrames = [];
 
         if (this.depthRbo) {
             this.gl.deleteRenderbuffer(this.depthRbo);
@@ -178,6 +180,14 @@ class Painter {
         this.rasterBoundsBuffer = new VertexBuffer(gl, rasterBoundsArray);
         this.rasterBoundsVAO = new VertexArrayObject();
 
+        const viewportArray = new PosArray();
+        viewportArray.emplaceBack(0, 0);
+        viewportArray.emplaceBack(1, 0);
+        viewportArray.emplaceBack(0, 1);
+        viewportArray.emplaceBack(1, 1);
+        this.viewportBuffer = new VertexBuffer(gl, viewportArray);
+        this.viewportVAO = new VertexArrayObject();
+
         this.extTextureFilterAnisotropic = (
             gl.getExtension('EXT_texture_filter_anisotropic') ||
             gl.getExtension('MOZ_EXT_texture_filter_anisotropic') ||
@@ -185,6 +195,11 @@ class Painter {
         );
         if (this.extTextureFilterAnisotropic) {
             this.extTextureFilterAnisotropicMax = gl.getParameter(this.extTextureFilterAnisotropic.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+        }
+
+        this.extTextureHalfFloat = gl.getExtension('OES_texture_half_float');
+        if (this.extTextureHalfFloat) {
+            gl.getExtension('OES_texture_half_float_linear');
         }
     }
 
@@ -272,6 +287,14 @@ class Painter {
 
         const layerIds = this.style._order;
 
+        const rasterSources = util.filterObject(this.style.sourceCaches, (sc) => { return sc._source.type === 'raster'; });
+        for (const key in rasterSources) {
+            const sourceCache = rasterSources[key];
+            const coords = sourceCache.getVisibleCoordinates();
+            const visibleTiles = coords.map((c)=>{ return sourceCache.getTile(c); });
+            updateTileMasks(visibleTiles, this.gl);
+        }
+
         // 3D pass
         // We first create a renderbuffer that we'll use to preserve depth
         // results across 3D layers, then render each 3D layer to its own
@@ -312,7 +335,8 @@ class Painter {
 
                 this._setup3DRenderbuffer();
 
-                const renderTarget = this.viewportFrames.pop() || new RenderTexture(this);
+                const renderTarget = layer.viewportFrame || new RenderTexture(this);
+                layer.viewportFrame = renderTarget;
                 renderTarget.bindWithDepth(this.depthRbo);
 
                 if (first) {
@@ -323,7 +347,6 @@ class Painter {
                 this.renderLayer(this, (sourceCache: any), layer, coords);
 
                 renderTarget.unbind();
-                this.prerenderedFrames[layer.id] = renderTarget;
             }
         }
 
@@ -480,10 +503,10 @@ class Painter {
         return translatedMatrix;
     }
 
-    saveTileTexture(texture: WebGLTexture & { size: number }) {
-        const textures = this._tileTextures[texture.size];
+    saveTileTexture(texture: Texture) {
+        const textures = this._tileTextures[texture.size[0]];
         if (!textures) {
-            this._tileTextures[texture.size] = [texture];
+            this._tileTextures[texture.size[0]] = [texture];
         } else {
             textures.push(texture);
         }

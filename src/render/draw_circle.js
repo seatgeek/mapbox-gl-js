@@ -1,6 +1,5 @@
 // @flow
 
-const browser = require('../util/browser');
 const pixelsToTileUnits = require('../source/pixels_to_tile_units');
 
 import type Painter from './painter';
@@ -13,6 +12,7 @@ module.exports = drawCircles;
 
 function drawCircles(painter: Painter, sourceCache: SourceCache, layer: CircleStyleLayer, coords: Array<TileCoord>) {
     if (painter.renderPass !== 'translucent') return;
+    if (layer.isOpacityZero(painter.transform.zoom)) return;
 
     const gl = painter.gl;
 
@@ -44,8 +44,6 @@ function drawCircles(painter: Painter, sourceCache: SourceCache, layer: CircleSt
             gl.uniform1i(program.uniforms.u_pitch_with_map, 0);
             gl.uniform2fv(program.uniforms.u_extrude_scale, painter.transform.pixelsToGLUnits);
         }
-
-        gl.uniform1f(program.uniforms.u_devicepixelratio, browser.devicePixelRatio);
 
         gl.uniformMatrix4fv(program.uniforms.u_matrix, false, painter.translatePosMatrix(
             coord.posMatrix,

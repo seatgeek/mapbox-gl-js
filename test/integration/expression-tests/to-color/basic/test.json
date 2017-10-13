@@ -1,5 +1,4 @@
 {
-  "expectExpressionType": null,
   "expression": ["to-color", ["get", "x"]],
   "inputs": [
     [{}, {"properties": {"x": "red"}}],
@@ -14,7 +13,7 @@
       "result": "success",
       "isFeatureConstant": false,
       "isZoomConstant": true,
-      "type": "Color"
+      "type": "color"
     },
     "outputs": [
       [1, 0, 0, 1],

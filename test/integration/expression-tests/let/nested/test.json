@@ -1,5 +1,4 @@
 {
-  "expectExpressionType": null,
   "expression": [
     "let",
     "a",
@@ -12,7 +11,7 @@
       "result": "success",
       "isFeatureConstant": true,
       "isZoomConstant": true,
-      "type": "Number"
+      "type": "number"
     },
     "outputs": [3]
   }

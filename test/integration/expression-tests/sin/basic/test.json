@@ -1,5 +1,4 @@
 {
-  "expectExpressionType": null,
   "expression": ["sin", 0],
   "inputs": [[{}, {}]],
   "expected": {
@@ -7,7 +6,7 @@
       "result": "success",
       "isFeatureConstant": true,
       "isZoomConstant": true,
-      "type": "Number"
+      "type": "number"
     },
     "outputs": [0]
   }

@@ -788,7 +788,14 @@ test('camera', (t) => {
             const camera = createCamera({zoom: 22, center:[0, 0]});
             t.doesNotThrow(()=>camera.flyTo({zoom:10, center:[0, 0]}));
             t.end();
+        });
 
+        t.test('does not throw when cameras current zoom is above maxzoom and an offset creates infinite zoom out factor', (t)=>{
+            const transform = new Transform(0, 20.9999, true);
+            transform.resize(512, 512);
+            const camera = new Camera(transform, {}).jumpTo({zoom: 21, center:[0, 0]});
+            t.doesNotThrow(()=>camera.flyTo({zoom:7.5, center:[0, 0], offset:[0, 70]}));
+            t.end();
         });
 
         t.test('zooms to specified level', (t) => {
@@ -1192,6 +1199,22 @@ test('camera', (t) => {
 
             const flyOptions = { center: [12, 34], zoom: 1};
             camera.flyTo(flyOptions);
+        });
+
+        t.test('resets duration to 0 if it exceeds maxDuration', (t) => {
+            let startTime, endTime, timeDiff;
+            const camera = createCamera({ center: [37.63454, 55.75868], zoom: 18});
+
+            camera
+                .on('movestart', () => { startTime = new Date(); })
+                .on('moveend', () => {
+                    endTime = new Date();
+                    timeDiff = endTime - startTime;
+                    t.equalWithPrecision(timeDiff, 0, 1e+1);
+                    t.end();
+                });
+
+            camera.flyTo({ center: [-122.3998631, 37.7884307], maxDuration: 100 });
         });
 
         t.end();

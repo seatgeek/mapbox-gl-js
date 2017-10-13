@@ -1,5 +1,5 @@
 {
-  "expectExpressionType": {"kind": "Array", "itemType": {"kind": "String"}},
+  "propertySpec": {"type": "array", "value": "string"},
   "expression": [
     "coalesce",
     ["literal", ["one"]],
@@ -13,7 +13,7 @@
       "errors": [
         {
           "key": "[3]",
-          "error": "Expected Array<String> but found Null instead."
+          "error": "Expected array<string> but found null instead."
         }
       ]
     }

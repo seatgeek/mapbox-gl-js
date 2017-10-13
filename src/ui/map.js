@@ -166,10 +166,6 @@ const defaultOptions = {
  *   bearing (rotation) will snap to north. For example, with a `bearingSnap` of 7, if the user rotates
  *   the map within 7 degrees of north, the map will automatically snap to exact north.
  * @param {boolean} [options.pitchWithRotate=true] If `false`, the map's pitch (tilt) control with "drag to rotate" interaction will be disabled.
- * @param {Array<string>} [options.classes] Mapbox style class names with which to initialize the map.
- *   Keep in mind that these classes are used for controlling a style layer's paint properties, so are *not* reflected
- *   in an HTML element's `class` attribute. To learn more about Mapbox style classes, read about
- *   [Layers](https://www.mapbox.com/mapbox-gl-style-spec/#layers) in the style specification.
  * @param {boolean} [options.attributionControl=true] If `true`, an {@link AttributionControl} will be added to the map.
  * @param {string} [options.logoPosition='bottom-left'] A string representing the position of the Mapbox wordmark on the map. Valid options are `top-left`,`top-right`, `bottom-left`, `bottom-right`.
  * @param {boolean} [options.failIfMajorPerformanceCaveat=false] If `true`, map creation will fail if the performance of Mapbox
@@ -223,10 +219,11 @@ class Map extends Camera {
 
     _classes: Array<string>;
     _container: HTMLElement;
+    _missingCSSContainer: HTMLElement;
     _canvasContainer: HTMLElement;
     _controlContainer: HTMLElement;
     _controlPositions: {[string]: HTMLElement};
-    _classOptions: ?{transition: boolean};
+    _classOptions: ?{transition?: boolean};
     _interactive: ?boolean;
     _showTileBoundaries: ?boolean;
     _showCollisionBoxes: ?boolean;
@@ -332,11 +329,8 @@ class Map extends Camera {
             });
         }
 
-        this._classes = [];
-
         this.resize();
 
-        if (options.classes) this.setClasses(options.classes);
         if (options.style) this.setStyle(options.style, { localIdeographFontFamily: options.localIdeographFontFamily });
 
         if (options.attributionControl) this.addControl(new AttributionControl());
@@ -346,7 +340,7 @@ class Map extends Camera {
             if (this.transform.unmodified) {
                 this.jumpTo(this.style.stylesheet);
             }
-            this.style.update(this._classes, {transition: false});
+            this.style.update({transition: false});
         });
 
         this.on('data', this._onData);
@@ -388,103 +382,6 @@ class Map extends Camera {
     removeControl(control: IControl) {
         control.onRemove(this);
         return this;
-    }
-
-    /**
-     * Adds a Mapbox style class to the map.
-     *
-     * Keep in mind that these classes are used for controlling a style layer's paint properties, so are *not* reflected
-     * in an HTML element's `class` attribute. To learn more about Mapbox style classes, read about
-     * [Layers](https://www.mapbox.com/mapbox-gl-style-spec/#layers) in the style specification.
-     *
-     * **Note:** Style classes are deprecated and will be removed in an upcoming release of Mapbox GL JS.
-     *
-     * @param {string} klass The style class to add.
-     * @param {Object} [options]
-     * @param {boolean} [options.transition] If `true`, property changes will smoothly transition.
-     * @fires change
-     * @returns {Map} `this`
-     */
-    addClass(klass: string, options: ?{transition: boolean}) {
-        util.warnOnce('Style classes are deprecated and will be removed in an upcoming release of Mapbox GL JS.');
-        if (this._classes.indexOf(klass) >= 0 || klass === '') return this;
-        this._classes.push(klass);
-        this._classOptions = options;
-
-        if (this.style) this.style.updateClasses();
-        return this._update(true);
-    }
-
-    /**
-     * Removes a Mapbox style class from the map.
-     *
-     * **Note:** Style classes are deprecated and will be removed in an upcoming release of Mapbox GL JS.
-     *
-     * @param {string} klass The style class to remove.
-     * @param {Object} [options]
-     * @param {boolean} [options.transition] If `true`, property changes will smoothly transition.
-     * @fires change
-     * @returns {Map} `this`
-     */
-    removeClass(klass: string, options: ?{transition: boolean}) {
-        util.warnOnce('Style classes are deprecated and will be removed in an upcoming release of Mapbox GL JS.');
-        const i = this._classes.indexOf(klass);
-        if (i < 0 || klass === '') return this;
-        this._classes.splice(i, 1);
-        this._classOptions = options;
-
-        if (this.style) this.style.updateClasses();
-        return this._update(true);
-    }
-
-    /**
-     * Replaces the map's existing Mapbox style classes with a new array of classes.
-     *
-     * **Note:** Style classes are deprecated and will be removed in an upcoming release of Mapbox GL JS.
-     *
-     * @param {Array<string>} klasses The style classes to set.
-     * @param {Object} [options]
-     * @param {boolean} [options.transition] If `true`, property changes will smoothly transition.
-     * @fires change
-     * @returns {Map} `this`
-     */
-    setClasses(klasses: Array<string>, options: ?{transition: boolean}) {
-        util.warnOnce('Style classes are deprecated and will be removed in an upcoming release of Mapbox GL JS.');
-        const uniqueClasses = {};
-        for (let i = 0; i < klasses.length; i++) {
-            if (klasses[i] !== '') uniqueClasses[klasses[i]] = true;
-        }
-        this._classes = Object.keys(uniqueClasses);
-        this._classOptions = options;
-
-        if (this.style) this.style.updateClasses();
-        return this._update(true);
-    }
-
-    /**
-     * Returns a Boolean indicating whether the map has the
-     * specified Mapbox style class.
-     *
-     * **Note:** Style classes are deprecated and will be removed in an upcoming release of Mapbox GL JS.
-     *
-     * @param {string} klass The style class to test.
-     * @returns {boolean} `true` if the map has the specified style class.
-     */
-    hasClass(klass: string) {
-        util.warnOnce('Style classes are deprecated and will be removed in an upcoming release of Mapbox GL JS.');
-        return this._classes.indexOf(klass) >= 0;
-    }
-
-    /**
-     * Returns the map's Mapbox style classes.
-     *
-     * **Note:** Style classes are deprecated and will be removed in an upcoming release of Mapbox GL JS.
-     *
-     * @returns {Array<string>} The map's style classes.
-     */
-    getClasses() {
-        util.warnOnce('Style classes are deprecated and will be removed in an upcoming release of Mapbox GL JS.');
-        return this._classes;
     }
 
     /**
@@ -969,7 +866,7 @@ class Map extends Camera {
      * state and perform only the changes necessary to make the map style match
      * the desired state.
      *
-     * @param {Object|string} style A JSON object conforming to the schema described in the
+     * @param style A JSON object conforming to the schema described in the
      *   [Mapbox Style Specification](https://mapbox.com/mapbox-gl-style-spec/), or a URL to such JSON.
      * @param {Object} [options]
      * @param {boolean} [options.diff=true] If false, force a 'full' update, removing the current style
@@ -980,10 +877,9 @@ class Map extends Camera {
      * @returns {Map} `this`
      * @see [Change a map's style](https://www.mapbox.com/mapbox-gl-js/example/setstyle/)
      */
-    setStyle(style: any, options?: {diff?: boolean} & StyleOptions) {
-        const shouldTryDiff = (!options || (options.diff !== false && !options.localIdeographFontFamily)) && this.style && style &&
-            !(style instanceof Style) && typeof style !== 'string';
-        if (shouldTryDiff) {
+    setStyle(style: StyleSpecification | string | null, options?: {diff?: boolean} & StyleOptions) {
+        const shouldTryDiff = (!options || (options.diff !== false && !options.localIdeographFontFamily)) && this.style;
+        if (shouldTryDiff && style && typeof style === 'object') {
             try {
                 if (this.style.setState(style)) {
                     this._update(true);
@@ -1003,15 +899,19 @@ class Map extends Camera {
         }
 
         if (!style) {
-            this.style = (null: any);
+            delete this.style;
             return this;
-        } else if (style instanceof Style) {
-            this.style = style;
         } else {
-            this.style = new Style(style, this, options || {});
+            this.style = new Style(this, options || {});
         }
 
         this.style.setEventedParent(this, {style: this.style});
+
+        if (typeof style === 'string') {
+            this.style.loadURL(style);
+        } else {
+            this.style.loadJSON(style);
+        }
 
         this.on('rotate', this.style._redoPlacement);
         this.on('pitch', this.style._redoPlacement);
@@ -1297,7 +1197,6 @@ class Map extends Camera {
      * @param {string} name The name of the paint property to set.
      * @param {*} value The value of the paint propery to set.
      *   Must be of a type appropriate for the property, as defined in the [Mapbox Style Specification](https://www.mapbox.com/mapbox-gl-style-spec/).
-     * @param {string=} klass A style class specifier for the paint property.
      * @returns {Map} `this`
      * @example
      * map.setPaintProperty('my-layer', 'fill-color', '#faafee');
@@ -1305,8 +1204,8 @@ class Map extends Camera {
      * @see [Adjust a layer's opacity](https://www.mapbox.com/mapbox-gl-js/example/adjust-layer-opacity/)
      * @see [Create a draggable point](https://www.mapbox.com/mapbox-gl-js/example/drag-a-point/)
      */
-    setPaintProperty(layer: string, name: string, value: any, klass?: string) {
-        this.style.setPaintProperty(layer, name, value, klass);
+    setPaintProperty(layer: string, name: string, value: any) {
+        this.style.setPaintProperty(layer, name, value);
         this._update(true);
         return this;
     }
@@ -1316,11 +1215,10 @@ class Map extends Camera {
      *
      * @param {string} layer The ID of the layer to get the paint property from.
      * @param {string} name The name of a paint property to get.
-     * @param {string=} klass A class specifier for the paint property.
      * @returns {*} The value of the specified paint property.
      */
-    getPaintProperty(layer: string, name: string, klass?: string) {
-        return this.style.getPaintProperty(layer, name, klass);
+    getPaintProperty(layer: string, name: string) {
+        return this.style.getPaintProperty(layer, name);
     }
 
     /**
@@ -1424,6 +1322,9 @@ class Map extends Camera {
     _setupContainer() {
         const container = this._container;
         container.classList.add('mapboxgl-map');
+
+        const missingCSSContainer = this._missingCSSContainer = DOM.create('div', 'mapboxgl-missing-css', container);
+        missingCSSContainer.innerHTML = 'Missing Mapbox GL JS CSS';
 
         const canvasContainer = this._canvasContainer = DOM.create('div', 'mapboxgl-canvas-container', container);
         if (this._interactive) {
@@ -1545,8 +1446,7 @@ class Map extends Camera {
         //  - Recalculate zoom-dependent paint properties.
         if (this.style && this._styleDirty) {
             this._styleDirty = false;
-            this.style.update(this._classes, this._classOptions);
-            this._classOptions = null;
+            this.style.update();
             this.style._recalculate(this.transform.zoom);
         }
 
@@ -1614,6 +1514,7 @@ class Map extends Camera {
         if (extension) extension.loseContext();
         removeNode(this._canvasContainer);
         removeNode(this._controlContainer);
+        removeNode(this._missingCSSContainer);
         this._container.classList.remove('mapboxgl-map');
         this.fire('remove');
     }

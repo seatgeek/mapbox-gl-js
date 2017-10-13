@@ -11,17 +11,23 @@ const featureFilter = require('../style-spec/feature_filter');
 const CollisionTile = require('../symbol/collision_tile');
 const CollisionBoxArray = require('../symbol/collision_box');
 const Throttler = require('../util/throttler');
+const RasterBoundsArray = require('../data/raster_bounds_array');
+const TileCoord = require('./tile_coord');
+const EXTENT = require('../data/extent');
+const Point = require('@mapbox/point-geometry');
+const VertexBuffer = require('../gl/vertex_buffer');
+const IndexBuffer = require('../gl/index_buffer');
 const Texture = require('../render/texture');
+const {SegmentVector} = require('../data/segment');
+const {TriangleIndexArray} = require('../data/index_array_type');
 
 const CLOCK_SKEW_RETRY_TIMEOUT = 30000;
 
 import type {Bucket} from '../data/bucket';
 import type StyleLayer from '../style/style_layer';
-import type TileCoord from './tile_coord';
 import type {WorkerTileResult} from './worker_source';
-import type Point from '@mapbox/point-geometry';
 import type {RGBAImage, AlphaImage} from '../util/image';
-
+import type Mask from '../render/tile_mask';
 export type TileState =
     | 'loading'   // Tile data is in the process of loading.
     | 'loaded'    // Tile data has been loaded. Tile can be rendered.
@@ -65,10 +71,13 @@ class Tile {
     cameraToTileDistance: number;
     showCollisionBoxes: boolean;
     placementSource: any;
-    workerID: number;
+    workerID: number | void;
     vtLayers: {[string]: VectorTileLayer};
-
+    mask: Mask;
     aborted: ?boolean;
+    maskedBoundsBuffer: ?VertexBuffer;
+    maskedIndexBuffer: ?IndexBuffer;
+    segments: ?SegmentVector;
     request: any;
     texture: any;
     refreshedUponExpiration: boolean;
@@ -348,12 +357,76 @@ class Tile {
 
         for (let i = 0; i < layer.length; i++) {
             const feature = layer.feature(i);
-            if (filter(feature)) {
+            if (filter({zoom: this.coord.z}, feature)) {
                 const geojsonFeature = new GeoJSONFeature(feature, this.coord.z, this.coord.x, this.coord.y);
                 (geojsonFeature: any).tile = coord;
                 result.push(geojsonFeature);
             }
         }
+    }
+
+    clearMask() {
+        if (this.segments) {
+            this.segments.destroy();
+            delete this.segments;
+        }
+        if (this.maskedBoundsBuffer) {
+            this.maskedBoundsBuffer.destroy();
+            delete this.maskedBoundsBuffer;
+        }
+        if (this.maskedIndexBuffer) {
+            this.maskedIndexBuffer.destroy();
+            delete this.maskedIndexBuffer;
+        }
+    }
+
+    setMask(mask: Mask, gl: WebGLRenderingContext) {
+
+        // don't redo buffer work if the mask is the same;
+        if (util.deepEqual(this.mask, mask)) return;
+
+        this.mask = mask;
+        this.clearMask();
+
+        // We want to render the full tile, and keeping the segments/vertices/indices empty means
+        // using the global shared buffers for covering the entire tile.
+        if (util.deepEqual(mask, {'0': true})) return;
+
+        const maskedBoundsArray = new RasterBoundsArray();
+        const indexArray = new TriangleIndexArray();
+
+        this.segments = new SegmentVector();
+        // Create a new segment so that we will upload (empty) buffers even when there is nothing to
+        // draw for this tile.
+        this.segments.prepareSegment(0, maskedBoundsArray, indexArray);
+
+        const maskArray = Object.keys(mask);
+        for (let i = 0; i < maskArray.length; i++) {
+            const maskCoord = TileCoord.fromID(+maskArray[i]);
+            const vertexExtent = EXTENT >> maskCoord.z;
+            const tlVertex = new Point(maskCoord.x * vertexExtent, maskCoord.y * vertexExtent);
+            const brVertex = new Point(tlVertex.x + vertexExtent, tlVertex.y + vertexExtent);
+
+            // not sure why flow is complaining here because it doesn't complain at L401
+            const segment = (this.segments: any).prepareSegment(4, maskedBoundsArray, indexArray);
+
+            maskedBoundsArray.emplaceBack(tlVertex.x, tlVertex.y, tlVertex.x, tlVertex.y);
+            maskedBoundsArray.emplaceBack(brVertex.x, tlVertex.y, brVertex.x, tlVertex.y);
+            maskedBoundsArray.emplaceBack(tlVertex.x, brVertex.y, tlVertex.x, brVertex.y);
+            maskedBoundsArray.emplaceBack(brVertex.x, brVertex.y, brVertex.x, brVertex.y);
+
+            const offset = segment.vertexLength;
+            // 0, 1, 2
+            // 1, 2, 3
+            indexArray.emplaceBack(offset, offset + 1, offset + 2);
+            indexArray.emplaceBack(offset + 1, offset + 2, offset + 3);
+
+            segment.vertexLength += 4;
+            segment.primitiveLength += 2;
+        }
+
+        this.maskedBoundsBuffer = new VertexBuffer(gl, maskedBoundsArray);
+        this.maskedIndexBuffer = new IndexBuffer(gl, indexArray);
     }
 
     hasData() {

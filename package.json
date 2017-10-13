@@ -1,7 +1,7 @@
 {
   "name": "mapbox-gl",
   "description": "A WebGL interactive maps library",
-  "version": "0.40.0",
+  "version": "0.41.0",
   "main": "dist/mapbox-gl.js",
   "style": "dist/mapbox-gl.css",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -59,6 +59,7 @@
     "eslint-plugin-flowtype": "^2.34.0",
     "eslint-plugin-html": "^3.0.0",
     "eslint-plugin-node": "^5.1.1",
+    "eslint-plugin-react": "^7.3.0",
     "flow-bin": "^0.54.1",
     "flow-coverage-report": "^0.3.0",
     "flow-remove-types": "^1.0.4",
@@ -67,7 +68,7 @@
     "glob": "^7.0.3",
     "highlight.js": "^9.9.0",
     "in-publish": "^2.0.0",
-    "jsdom": "^9.11.0",
+    "jsdom": "^11.2.0",
     "json-stringify-pretty-compact": "^1.0.4",
     "lodash": "^4.16.0",
     "minifyify": "^7.0.1",
@@ -96,7 +97,8 @@
           "bubleError": true,
           "transforms": {
             "dangerousForOf": true
-          }
+          },
+          "objectAssign": "Object.assign"
         }
       ],
       "package-json-versionify",
@@ -116,8 +118,8 @@
     "watch-style-property-editor": "watchify debug/style_property_editor.js --debug -o debug/style_property_editor_generated.js --standalone StylePropertyEditor --verbose",
     "build-min": "browserify src/index.js --debug --plugin [minifyify --map mapbox-gl.js.map --output dist/mapbox-gl.js.map] --standalone mapboxgl | derequire > dist/mapbox-gl.js && tap --no-coverage test/build/min.test.js",
     "build-token": "browserify debug/access_token.js --debug --transform envify > debug/access_token_generated.js",
-    "build-benchmarks": "BENCHMARK_VERSION=\"$(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short=7 HEAD)\" browserify bench/benchmarks.js --plugin [minifyify --no-map] --transform envify --outfile bench/benchmarks_generated.js --verbose",
-    "watch-benchmarks": "BENCHMARK_VERSION=\"$(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short=7 HEAD)\" watchify bench/benchmarks.js --plugin [minifyify --no-map] --transform envify --outfile bench/benchmarks_generated.js --verbose",
+    "build-benchmarks": "BENCHMARK_VERSION=\"$(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short=7 HEAD)\" browserify bench/benchmarks.js --debug --transform envify --outfile bench/benchmarks_generated.js --verbose",
+    "watch-benchmarks": "BENCHMARK_VERSION=\"$(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short=7 HEAD)\" watchify bench/benchmarks.js --debug --transform envify --outfile bench/benchmarks_generated.js --verbose",
     "watch-benchmarks-view": "watchify bench/benchmarks_view.js --debug --outfile bench/benchmarks_view_generated.js --verbose",
     "start-server": "st --no-cache --localhost --port 9966 --index index.html .",
     "start": "run-p build-token watch-dev watch-style-property-editor watch-benchmarks watch-benchmarks-view start-server",
@@ -130,7 +132,7 @@
     "lint-docs": "documentation lint src/index.js",
     "lint-css": "stylelint 'dist/mapbox-gl.css'",
     "open-changed-examples": "git diff --name-only mb-pages HEAD -- docs/_posts/examples/*.html | awk '{print \"http://127.0.0.1:4000/mapbox-gl-js/example/\" substr($0,33,length($0)-37)}' | xargs open",
-    "test": "run-s lint lint-css test-unit test-flow",
+    "test": "run-s lint lint-css test-flow test-unit",
     "test-suite": "run-s test-render test-query",
     "test-suite-clean": "find test/integration/{render,query}-tests -mindepth 2 -type d  -not \\( -exec test -e \"{}/style.json\" \\; \\) -print | xargs -t rm -r",
     "test-unit": "tap --reporter dot --no-coverage test/unit",

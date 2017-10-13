@@ -1,11 +1,10 @@
 {
-  "expectExpressionType": null,
   "expression": ["match", ["string", ["get", "x"]], "0", "match", false],
   "expected": {
     "compiled": {
       "result": "error",
       "errors": [
-        {"key": "[4]", "error": "Expected String but found Boolean instead."}
+        {"key": "[4]", "error": "Expected string but found boolean instead."}
       ]
     }
   }

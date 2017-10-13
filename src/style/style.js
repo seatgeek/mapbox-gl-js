@@ -19,8 +19,8 @@ const getSourceType = require('../source/source').getType;
 const setSourceType = require('../source/source').setType;
 const QueryFeatures = require('../source/query_features');
 const SourceCache = require('../source/source_cache');
+const GeoJSONSource = require('../source/geojson_source');
 const styleSpec = require('../style-spec/reference/latest');
-const MapboxGLFunction = require('../style-spec/function');
 const getWorkerPool = require('../util/global_worker_pool');
 const deref = require('../style-spec/deref');
 const diff = require('../style-spec/diff');
@@ -42,7 +42,8 @@ const supportedDiffOperations = util.pick(diff.operations, [
     'removeSource',
     'setLayerZoomRange',
     'setLight',
-    'setTransition'
+    'setTransition',
+    'setGeoJSONSourceData'
     // 'setGlyphs',
     // 'setSprite',
 ]);
@@ -59,7 +60,7 @@ export type StyleOptions = {
     localIdeographFontFamily?: string
 };
 
-type ZoomHistory = {
+export type ZoomHistory = {
     lastIntegerZoom: number,
     lastIntegerZoomTime: number,
     lastZoom: number
@@ -93,22 +94,14 @@ class Style extends Evented {
     _updatedSymbolOrder: boolean;
     z: number;
 
-    constructor(stylesheet: StyleSpecification, map: Map, options: StyleOptions) {
+    constructor(map: Map, options: StyleOptions = {}) {
         super();
-
-        options = util.extend({
-            validate: typeof stylesheet === 'string' ? !mapbox.isMapboxURL(stylesheet) : true
-        }, options);
-
-        const transformRequest = (url, resourceType) => {
-            return this.map ? this.map._transformRequest(url, resourceType) : { url };
-        };
 
         this.map = map;
         this.animationLoop = (map && map.animationLoop) || new AnimationLoop();
         this.dispatcher = new Dispatcher(getWorkerPool(), this);
         this.imageManager = new ImageManager();
-        this.glyphManager = new GlyphManager(transformRequest, options.localIdeographFontFamily);
+        this.glyphManager = new GlyphManager(map._transformRequest, options.localIdeographFontFamily);
         this.lineAtlas = new LineAtlas(256, 512);
 
         this._layers = {};
@@ -121,9 +114,6 @@ class Style extends Evented {
 
         this._resetUpdates();
 
-        this.setEventedParent(map);
-        this.fire('dataloading', {dataType: 'style'});
-
         const self = this;
         this._rtlTextPluginCallback = rtlTextPlugin.registerForPluginAvailability((args) => {
             self.dispatcher.broadcast('loadRTLTextPlugin', args.pluginBlobURL, args.errorCallback);
@@ -131,46 +121,6 @@ class Style extends Evented {
                 self.sourceCaches[id].reload(); // Should be a no-op if the plugin loads before any tiles load
             }
         });
-
-        const stylesheetLoaded = (err, stylesheet: ?StyleSpecification) => {
-            if (err) {
-                this.fire('error', {error: err});
-            } else if (stylesheet) {
-                if (options.validate && validateStyle.emitErrors(this, validateStyle(stylesheet))) return;
-
-                this._loaded = true;
-                this.stylesheet = stylesheet;
-
-                this.updateClasses();
-
-                for (const id in stylesheet.sources) {
-                    this.addSource(id, stylesheet.sources[id], options);
-                }
-
-                loadSprite(stylesheet.sprite, transformRequest, (err, images) => {
-                    if (err) {
-                        this.fire('error', err);
-                    } else if (images) {
-                        for (const id in images) {
-                            this.imageManager.addImage(id, images[id]);
-                        }
-                    }
-
-                    this.imageManager.setLoaded(true);
-                });
-
-                this.glyphManager.setURL(stylesheet.glyphs);
-                this._resolve();
-                this.fire('data', {dataType: 'style'});
-                this.fire('style.load');
-            }
-        };
-
-        if (typeof stylesheet === 'string') {
-            ajax.getJSON(transformRequest(mapbox.normalizeStyleURL(stylesheet), ajax.ResourceType.Style), (stylesheetLoaded: any));
-        } else {
-            browser.frame(() => stylesheetLoaded(null, stylesheet));
-        }
 
         this.on('data', (event) => {
             if (event.dataType !== 'source' || event.sourceDataType !== 'metadata') {
@@ -194,6 +144,89 @@ class Style extends Evented {
                 }
             }
         });
+    }
+
+    loadURL(url: string, options: {
+        validate?: boolean,
+        accessToken?: string
+    } = {}) {
+        this.fire('dataloading', {dataType: 'style'});
+
+        const validate = typeof options.validate === 'boolean' ?
+            options.validate : !mapbox.isMapboxURL(url);
+
+        url = mapbox.normalizeStyleURL(url, options.accessToken);
+        const request = this.map._transformRequest(url, ajax.ResourceType.Style);
+
+        ajax.getJSON(request, (error, json) => {
+            if (error) {
+                this.fire('error', {error});
+            } else if (json) {
+                this._load((json: any), validate);
+            }
+        });
+    }
+
+    loadJSON(json: StyleSpecification, options: {
+        validate?: boolean
+    } = {}) {
+        this.fire('dataloading', {dataType: 'style'});
+
+        browser.frame(() => {
+            this._load(json, options.validate !== false);
+        });
+    }
+
+    _load(json: StyleSpecification, validate: boolean) {
+        if (validate && validateStyle.emitErrors(this, validateStyle(json))) {
+            return;
+        }
+
+        this._loaded = true;
+        this.stylesheet = json;
+
+        this.updatePaintProperties();
+
+        for (const id in json.sources) {
+            this.addSource(id, json.sources[id], {validate: false});
+        }
+
+        if (json.sprite) {
+            loadSprite(json.sprite, this.map._transformRequest, (err, images) => {
+                if (err) {
+                    this.fire('error', err);
+                } else if (images) {
+                    for (const id in images) {
+                        this.imageManager.addImage(id, images[id]);
+                    }
+                }
+
+                this.imageManager.setLoaded(true);
+                this.fire('data', {dataType: 'style'});
+            });
+        } else {
+            this.imageManager.setLoaded(true);
+        }
+
+        this.glyphManager.setURL(json.glyphs);
+
+        const layers = deref(this.stylesheet.layers);
+
+        this._order = layers.map((layer) => layer.id);
+
+        this._layers = {};
+        for (let layer of layers) {
+            layer = StyleLayer.create(layer);
+            layer.setEventedParent(this, {layer: {id: layer.id}});
+            this._layers[layer.id] = layer;
+        }
+
+        this.dispatcher.broadcast('setLayers', this._serializeLayers(this._order));
+
+        this.light = new Light(this.stylesheet.light);
+
+        this.fire('data', {dataType: 'style'});
+        this.fire('style.load');
     }
 
     _validateLayer(layer: StyleLayer) {
@@ -236,31 +269,13 @@ class Style extends Evented {
         return true;
     }
 
-    _resolve() {
-        const layers = deref(this.stylesheet.layers);
-
-        this._order = layers.map((layer) => layer.id);
-
-        this._layers = {};
-        for (let layer of layers) {
-            layer = StyleLayer.create(layer);
-            layer.setEventedParent(this, {layer: {id: layer.id}});
-            this._layers[layer.id] = layer;
-        }
-
-        this.dispatcher.broadcast('setLayers', this._serializeLayers(this._order));
-
-        this.light = new Light(this.stylesheet.light);
-    }
-
     _serializeLayers(ids: Array<string>) {
         return ids.map((id) => this._layers[id].serialize());
     }
 
-    _applyClasses(classes?: Array<string>, options: ?{}) {
+    _applyPaintPropertyUpdates(options: ?{transition?: boolean}) {
         if (!this._loaded) return;
 
-        classes = classes || [];
         options = options || {transition: true};
         const transition = this.stylesheet.transition || {};
 
@@ -271,10 +286,10 @@ class Style extends Evented {
             const props = this._updatedPaintProps[id];
 
             if (this._updatedAllPaintProps || props.all) {
-                layer.updatePaintTransitions(classes, options, transition, this.animationLoop, this.zoomHistory);
+                layer.updatePaintTransitions(options, transition, this.animationLoop, this.zoomHistory);
             } else {
                 for (const paintName in props) {
-                    this._layers[id].updatePaintTransition(paintName, classes, options, transition, this.animationLoop, this.zoomHistory);
+                    this._layers[id].updatePaintTransition(paintName, options, transition, this.animationLoop, this.zoomHistory);
                 }
             }
         }
@@ -343,7 +358,7 @@ class Style extends Evented {
     /**
      * Apply queued style updates in a batch
      */
-    update(classes: Array<string>, options: ?{}) {
+    update(options: ?{transition?: boolean}) {
         if (!this._changed) return;
 
         const updatedIds = Object.keys(this._updatedLayers);
@@ -362,7 +377,7 @@ class Style extends Evented {
             }
         }
 
-        this._applyClasses(classes, options);
+        this._applyPaintPropertyUpdates(options);
         this._resetUpdates();
 
         this.fire('data', {dataType: 'style'});
@@ -501,6 +516,22 @@ class Style extends Evented {
     }
 
     /**
+    * Set the data of a GeoJSON source, given its id.
+    * @param {string} id id of the source
+    * @param {GeoJSON|string} data GeoJSON source
+    */
+    setGeoJSONSourceData(id: string, data: GeoJSON | string) {
+        this._checkLoaded();
+
+        assert(this.sourceCaches[id] !== undefined, 'There is no source with this ID');
+        const geojsonSource: GeoJSONSource = (this.sourceCaches[id].getSource(): any);
+        assert(geojsonSource.type === 'geojson');
+
+        geojsonSource.setData(data);
+        this._changed = true;
+    }
+
+    /**
      * Get a source by id.
      * @param {string} id id of the desired source
      * @returns {Object} source
@@ -535,7 +566,13 @@ class Style extends Evented {
 
         layer.setEventedParent(this, {layer: {id: id}});
 
+
         const index = before ? this._order.indexOf(before) : this._order.length;
+        if (before && index === -1) {
+            this.fire('error', { message: new Error(`Layer with id "${before}" does not exist on this map.`)});
+            return;
+        }
+
         this._order.splice(index, 0, id);
 
         this._layers[id] = layer;
@@ -563,7 +600,7 @@ class Style extends Evented {
             this._updatedSymbolOrder = true;
         }
 
-        this.updateClasses(id);
+        this.updatePaintProperties(id);
     }
 
     /**
@@ -736,7 +773,7 @@ class Style extends Evented {
         return this.getLayer(layer).getLayoutProperty(name);
     }
 
-    setPaintProperty(layerId: string, name: string, value: any, klass?: string) {
+    setPaintProperty(layerId: string, name: string, value: any) {
         this._checkLoaded();
 
         const layer = this.getLayer(layerId);
@@ -750,27 +787,21 @@ class Style extends Evented {
             return;
         }
 
-        if (util.deepEqual(layer.getPaintProperty(name, klass), value)) return;
+        if (util.deepEqual(layer.getPaintProperty(name), value)) return;
 
         const wasFeatureConstant = layer.isPaintValueFeatureConstant(name);
-        layer.setPaintProperty(name, value, klass);
-
-        const isFeatureConstant = !(
-            value &&
-            MapboxGLFunction.isFunctionDefinition(value) &&
-            value.property !== '$zoom' &&
-            value.property !== undefined
-        );
+        layer.setPaintProperty(name, value);
+        const isFeatureConstant = layer.isPaintValueFeatureConstant(name);
 
         if (!isFeatureConstant || !wasFeatureConstant) {
             this._updateLayer(layer);
         }
 
-        this.updateClasses(layerId, name);
+        this.updatePaintProperties(layerId, name);
     }
 
-    getPaintProperty(layer: string, name: string, klass?: string) {
-        return this.getLayer(layer).getPaintProperty(name, klass);
+    getPaintProperty(layer: string, name: string) {
+        return this.getLayer(layer).getPaintProperty(name);
     }
 
     getTransition() {
@@ -778,7 +809,7 @@ class Style extends Evented {
             this.stylesheet && this.stylesheet.transition);
     }
 
-    updateClasses(layerId?: string, paintName?: string) {
+    updatePaintProperties(layerId?: string, paintName?: string) {
         this._changed = true;
         if (!layerId) {
             this._updatedAllPaintProps = true;

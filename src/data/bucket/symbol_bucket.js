@@ -26,8 +26,9 @@ const classifyRings = require('../../util/classify_rings');
 const vectorTileFeatureTypes = require('@mapbox/vector-tile').VectorTileFeature.types;
 const createStructArrayType = require('../../util/struct_array');
 const verticalizePunctuation = require('../../util/verticalize_punctuation');
+const {getSizeData} = require('../../symbol/symbol_size');
 
-import type {Feature as ExpressionFeature} from '../../style-spec/function';
+import type {Feature as ExpressionFeature} from '../../style-spec/expression';
 import type {Bucket, BucketParameters, IndexedFeature, PopulateParameters} from '../bucket';
 import type {ProgramInterface, SerializedProgramConfiguration} from '../program_configuration';
 import type CollisionBoxArray, {CollisionBox} from '../../symbol/collision_box';
@@ -36,7 +37,7 @@ import type {
     StructArray,
     SerializedStructArray
 } from '../../util/struct_array';
-import type StyleLayer from '../../style/style_layer';
+import type SymbolStyleLayer from '../../style/style_layer/symbol_style_layer';
 import type {Shaping, PositionedIcon} from '../../symbol/shaping';
 import type {SymbolQuad} from '../../symbol/quads';
 import type {SizeData} from '../../symbol/symbol_size';
@@ -231,7 +232,7 @@ class SymbolBuffers {
     dynamicLayoutVertexArray: StructArray;
     dynamicLayoutVertexBuffer: VertexBuffer;
 
-    constructor(programInterface: ProgramInterface, layers: Array<StyleLayer>, zoom: number, arrays?: SerializedSymbolBuffer) {
+    constructor(programInterface: ProgramInterface, layers: Array<SymbolStyleLayer>, zoom: number, arrays?: SerializedSymbolBuffer) {
         this.programInterface = programInterface;
 
         const LayoutVertexArrayType = createVertexArrayType(programInterface.layoutAttributes);
@@ -323,7 +324,7 @@ class SymbolBucket implements Bucket {
     collisionBoxArray: CollisionBoxArray;
     zoom: number;
     overscaling: number;
-    layers: Array<StyleLayer>;
+    layers: Array<SymbolStyleLayer>;
     index: number;
     sdfIcons: boolean;
     iconsNeedLinear: boolean;
@@ -376,7 +377,7 @@ class SymbolBucket implements Bucket {
     }
 
     populate(features: Array<IndexedFeature>, options: PopulateParameters) {
-        const layer: StyleLayer = this.layers[0];
+        const layer: SymbolStyleLayer = this.layers[0];
         const layout = layer.layout;
         const textFont = layout['text-font'];
 
@@ -395,7 +396,7 @@ class SymbolBucket implements Bucket {
         const globalProperties =  {zoom: this.zoom};
 
         for (const {feature, index, sourceLayerIndex} of features) {
-            if (!layer.filter(feature)) {
+            if (!layer._featureFilter(globalProperties, feature)) {
                 continue;
             }
 
@@ -996,7 +997,7 @@ class SymbolBucket implements Bucket {
                       line: Array<Point>,
                       shapedTextOrientations: ShapedTextOrientations,
                       shapedIcon: PositionedIcon | void,
-                      layer: StyleLayer,
+                      layer: SymbolStyleLayer,
                       addToBuffers: boolean,
                       collisionBoxArray: CollisionBoxArray,
                       featureIndex: number,
@@ -1092,55 +1093,7 @@ class SymbolBucket implements Bucket {
     }
 }
 
-// For {text,icon}-size, get the bucket-level data that will be needed by
-// the painter to set symbol-size-related uniforms
-function getSizeData(tileZoom: number, layer: StyleLayer, sizeProperty: string): SizeData {
-    const isFeatureConstant = layer.isLayoutValueFeatureConstant(sizeProperty);
-    const isZoomConstant = layer.isLayoutValueZoomConstant(sizeProperty);
-
-    if (isZoomConstant && !isFeatureConstant) {
-        return { functionType: 'source' };
-    }
-
-    if (isZoomConstant && isFeatureConstant) {
-        return {
-            functionType: 'constant',
-            layoutSize: layer.getLayoutValue(sizeProperty, {zoom: tileZoom + 1})
-        };
-    }
-
-    // calculate covering zoom stops for zoom-dependent values
-    const levels = layer.getLayoutValueStopZoomLevels(sizeProperty);
-    let lower = 0;
-    while (lower < levels.length && levels[lower] <= tileZoom) lower++;
-    lower = Math.max(0, lower - 1);
-    let upper = lower;
-    while (upper < levels.length && levels[upper] < tileZoom + 1) upper++;
-    upper = Math.min(levels.length - 1, upper);
-
-    const coveringZoomRange: [number, number] = [levels[lower], levels[upper]];
-
-    if (!isFeatureConstant) {
-        return {
-            functionType: 'composite',
-            coveringZoomRange
-        };
-    } else {
-        // for camera functions, also save off the function values
-        // evaluated at the covering zoom levels
-        return {
-            functionType: 'camera',
-            layoutSize: layer.getLayoutValue(sizeProperty, {zoom: tileZoom + 1}),
-            coveringZoomRange,
-            coveringStopValues: [
-                layer.getLayoutValue(sizeProperty, {zoom: levels[lower]}),
-                layer.getLayoutValue(sizeProperty, {zoom: levels[upper]})
-            ]
-        };
-    }
-}
-
-function getSizeVertexData(layer: StyleLayer, tileZoom: number, sizeData: SizeData, sizeProperty, feature) {
+function getSizeVertexData(layer: SymbolStyleLayer, tileZoom: number, sizeData: SizeData, sizeProperty, feature) {
     if (sizeData.functionType === 'source') {
         return [
             10 * layer.getLayoutValue(sizeProperty, ({}: any), feature)

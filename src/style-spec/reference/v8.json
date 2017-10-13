@@ -302,25 +302,6 @@
       "type": "string",
       "required": true,
       "doc": "HTML ID of the canvas from which to read pixels."
-    },
-    "contextType": {
-      "required": true,
-      "type": "enum",
-      "values": {
-        "2d": {
-          "doc" : "Source canvas is associated with a `2d` drawing context."
-        },
-        "webgl": {
-          "doc": "Source canvas is associated with a `webgl` drawing context."
-        },
-        "experimental-webgl": {
-          "doc": "Source canvas is associated with an `experimental-webgl` drawing context."
-        },
-        "webgl2": {
-          "doc": "Source canvas is associated with a `webgl2` drawing context."
-        }
-      },
-      "doc": "The context identifier defining the drawing context associated to the source canvas (see HTMLCanvasElement.getContext() documentation)."
     }
   },
   "layer": {
@@ -376,6 +357,14 @@
             }
           }
         },
+        "heatmap": {
+          "doc": "A heatmap.",
+          "sdk-support": {
+            "basic functionality": {
+              "js": "0.41.0"
+            }
+          }
+        },
         "fill-extrusion": {
           "doc": "An extruded (3D) polygon.",
           "sdk-support": {
@@ -415,10 +404,6 @@
     "metadata": {
       "type": "*",
       "doc": "Arbitrary properties useful to track with the layer, but do not influence rendering. Properties should be prefixed to avoid collisions, like 'mapbox:'."
-    },
-    "ref": {
-      "type": "string",
-      "doc": "References another layer to copy `type`, `source`, `source-layer`, `minzoom`, `maxzoom`, `filter`, and `layout` properties from. This allows the layers to share processing and be more efficient."
     },
     "source": {
       "type": "string",
@@ -461,6 +446,7 @@
     "layout_fill",
     "layout_line",
     "layout_circle",
+    "layout_heatmap",
     "layout_fill-extrusion",
     "layout_symbol",
     "layout_raster",
@@ -531,6 +517,26 @@
           "android": "2.0.1",
           "ios": "2.0.0",
           "macos": "0.1.0"
+        }
+      }
+    }
+  },
+  "layout_heatmap": {
+    "visibility": {
+      "type": "enum",
+      "values": {
+        "visible": {
+            "doc": "The layer is shown."
+        },
+        "none": {
+            "doc": "The layer is not shown."
+        }
+      },
+      "default": "visible",
+      "doc": "Whether this layer is displayed.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "0.41.0"
         }
       }
     }
@@ -940,7 +946,7 @@
       "function": "piecewise-constant",
       "zoom-function": true,
       "property-function": true,
-      "doc": "Name of image in sprite to use for drawing an image background. A string with {tokens} replaced, referencing the data property to pull from.",
+      "doc": "Name of image in sprite to use for drawing an image background. A string with `{tokens}` replaced, referencing the data property to pull from. (`{token}` replacement is only supported for literal `icon-image` values; not for property functions.)",
       "tokens": true,
       "sdk-support": {
         "basic functionality": {
@@ -1214,7 +1220,7 @@
       "property-function": true,
       "default": "",
       "tokens": true,
-      "doc": "Value to use for a text label. Feature properties are specified using tokens like {field_name}.  (Token replacement is only supported for literal `text-field` values--not for property functions.)",
+      "doc": "Value to use for a text label. Feature properties are specified using tokens like `{field_name}`. (`{token}` replacement is only supported for literal `text-field` values; not for property functions.)",
       "sdk-support": {
         "basic functionality": {
           "js": "0.10.0",
@@ -1845,187 +1851,248 @@
     "type": "enum",
     "values": {
       "let": {
-        "doc": "Binds expressions to named variables, which can then be referenced in the result expression using [\"var\", \"variable_name\"]."
+        "doc": "Binds expressions to named variables, which can then be referenced in the result expression using [\"var\", \"variable_name\"].",
+        "group": "Variable binding"
       },
       "var": {
-        "doc": "References variable bound using \"let\"."
+        "doc": "References variable bound using \"let\".",
+        "group": "Variable binding"
       },
       "literal": {
-        "doc": "Provides a literal array or object value."
+        "doc": "Provides a literal array or object value.",
+        "group": "Types"
       },
       "array": {
-        "doc": "Asserts that the input is an array (optinally with a specific item type and length)."
+        "doc": "Asserts that the input is an array (optinally with a specific item type and length).",
+        "group": "Types"
       },
       "at": {
-        "doc": "Retrieves an item from an array."
+        "doc": "Retrieves an item from an array.",
+        "group": "Lookup"
       },
-      "contains": {
-        "doc": "Tests whether a value exists in an array."
-      },
-      "case": {
-        "doc": "Yields the value of the first output expression whose corresponding test evaluates to true."
+        "case": {
+        "doc": "Yields the value of the first output expression whose corresponding test evaluates to true.",
+        "group": "Decision"
       },
       "match": {
-        "doc": "Yields the output value whose label value matches the input, or the fallback value if no match is found."
+        "doc": "Yields the output value whose label value matches the input, or the fallback value if no match is found.",
+        "group": "Decision"
       },
       "coalesce": {
-        "doc": "Evaluates each expression in turn until the first non-null value is obtained, and returns that value."
+        "doc": "Evaluates each expression in turn until the first non-null value is obtained, and returns that value.",
+        "group": "Decision"
       },
       "curve": {
-        "doc": "Interpolates an output value from the given input/output pairs using the specified interpolation strategy.  The input levels must be numeric literals in strictly ascending order."
+        "doc": "Interpolates an output value based on a set of input/output pairs using the specified interpolation strategy. A set of one input and one output value is known as a \"stop.\" Stop inputs must be numeric literals in strictly ascending order.\n\nInterpolation types:\n- `[\"step\"]`: returns the output value of the stop just less than the input , or the first input if the input is less than the first stop.\n- `[\"linear\"]`: interpolates linearly between the pair of stops just less than and just greater than the input .\n- `[\"exponential\", base]`: interpolates exponentially between the stops just less than and just greater than the input . `base` controls the rate at which the output increases: higher values make the output increase more towards the high end of the range. With values close to 1 the output increases linearly.\n- `[\"cubic-bezier\", x1, y2, x2, y2]`: interpolates using the cubic bezier curve defined by the given control points\n\nNote that interpolation types other that \"step\" are only supported when the output type is `number`, `array<number>`, or `Color`.",
+        "group": "Ramps, scales, curves"
       },
       "ln2": {
-        "doc": "Returns mathematical constant ln(2)."
+        "doc": "Returns mathematical constant ln(2).",
+        "group": "Math"
       },
       "pi": {
-        "doc": "Returns the mathematical constant pi."
+        "doc": "Returns the mathematical constant pi.",
+        "group": "Math"
       },
       "e": {
-        "doc": "Returns the mathematical constant e."
+        "doc": "Returns the mathematical constant e.",
+        "group": "Math"
       },
       "typeof": {
-        "doc": "Returns a string describing the type of the given value."
+        "doc": "Returns a string describing the type of the given value.",
+        "group": "Types"
       },
       "string": {
-        "doc": "Asserts that the input value is a String. If multiple values are provided, each one is evaluated in order until a String value is obtained."
+        "doc": "Asserts that the input value is a String. If multiple values are provided, each one is evaluated in order until a String value is obtained.",
+        "group": "Types"
       },
       "number": {
-        "doc": "Asserts that the input value is a Number. If multiple values are provided, each one is evaluated in order until a Number value is obtained."
+        "doc": "Asserts that the input value is a Number. If multiple values are provided, each one is evaluated in order until a Number value is obtained.",
+        "group": "Types"
       },
       "boolean": {
-        "doc": "Asserts that the input value is a Boolean. If multiple values are provided, each one is evaluated in order until a Boolean value is obtained."
+        "doc": "Asserts that the input value is a Boolean. If multiple values are provided, each one is evaluated in order until a Boolean value is obtained.",
+        "group": "Types"
       },
       "object": {
-        "doc": "Asserts that the input value is an Objects."
+        "doc": "Asserts that the input value is an Objects.",
+        "group": "Types"
       },
       "to-string": {
-        "doc": "Coerces the input value to a String."
+        "doc": "Coerces the input value to a String.",
+        "group": "Types"
       },
       "to-number": {
-        "doc": "Coerces the input value to a Number, if possible. If multiple values are provided, each one is evaluated in order until the first successful conversion is obtained."
+        "doc": "Coerces the input value to a Number, if possible. If multiple values are provided, each one is evaluated in order until the first successful conversion is obtained.",
+        "group": "Types"
       },
       "to-boolean": {
-        "doc": "Coerces the input value to a Boolean."
+        "doc": "Coerces the input value to a Boolean.",
+        "group": "Types"
       },
       "to-rgba": {
-        "doc": "Returns the an array of the given color's r, g, b, a components."
+        "doc": "Returns the an array of the given color's r, g, b, a components.",
+        "group": "Color"
       },
       "to-color": {
-        "doc": "Coerces the input value to a Color. If multiple values are provided, each one is evaluated in order until the first successful conversion is obtained."
+        "doc": "Coerces the input value to a Color. If multiple values are provided, each one is evaluated in order until the first successful conversion is obtained.",
+        "group": "Types"
       },
       "rgb": {
-        "doc": "Creates a color value from r, g, b components."
+        "doc": "Creates a color value from r, g, b components.",
+        "group": "Color"
       },
       "rgba": {
-        "doc": "Creates a color value from r, g, b, a components."
+        "doc": "Creates a color value from r, g, b, a components.",
+        "group": "Color"
       },
       "get": {
-        "doc": "Retrieves an the object property value.  If it's not provided, the object argument defaults to [\"properties\"].  Returns null if the requested property is missing from the object."
+        "doc": "Retrieves an the object property value.  If it's not provided, the object argument defaults to [\"properties\"].  Returns null if the requested property is missing from the object.",
+        "group": "Lookup"
       },
       "has": {
-        "doc": "Tests for the presence of an object property value.  If it's not provided, the object argument defaults to [\"properties\"]."
+        "doc": "Tests for the presence of an object property value.  If it's not provided, the object argument defaults to [\"properties\"].",
+        "group": "Lookup"
       },
       "length": {
-        "doc": "Gets the length of an array or string."
+        "doc": "Gets the length of an array or string.",
+        "group": "Lookup"
       },
       "properties": {
-        "doc": "Gets the feature properties object.  Note that in some cases, it may be more efficient to use [\"get\", \"property_name\"] directly."
+        "doc": "Gets the feature properties object.  Note that in some cases, it may be more efficient to use [\"get\", \"property_name\"] directly.",
+        "group": "Feature data"
       },
       "geometry-type": {
-        "doc": "Gets the feature's geometry type: Point, MultiPoint, LineString, MultiLineString, Polygon, MultiPolygon."
+        "doc": "Gets the feature's geometry type: Point, MultiPoint, LineString, MultiLineString, Polygon, MultiPolygon.",
+        "group": "Feature data"
       },
       "id": {
-        "doc": "Gets the feature's id, if it has one."
+        "doc": "Gets the feature's id, if it has one.",
+        "group": "Feature data"
       },
       "zoom": {
-        "doc": "Gets the current zoom level.  Note that in style layout and paint properties, [\"zoom\"] may only appear as the input to a top-level [\"curve\"] expression."
+        "doc": "Gets the current zoom level.  Note that in style layout and paint properties, [\"zoom\"] may only appear as the input to a top-level [\"curve\"] expression.",
+        "group": "Zoom"
+      },
+      "heatmap-density": {
+        "doc": "Gets the kernel density estimation of a pixel in a heatmap layer, which is a relative measure of how many data points are crowded around a particular pixel. Can only be used in the `heatmap-color` property.",
+        "group": "Heatmap"
       },
       "+": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "*": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "-": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "/": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "%": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "^": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "log10": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "ln": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "log2": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "sin": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "cos": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "tan": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "asin": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "acos": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "atan": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "min": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "max": {
-        "doc": ""
+        "doc": "",
+        "group": "Math"
       },
       "==": {
-        "doc": ""
+        "doc": "",
+        "group": "Decision"
       },
       "!=": {
-        "doc": ""
+        "doc": "",
+        "group": "Decision"
       },
       ">": {
-        "doc": ""
+        "doc": "",
+        "group": "Decision"
       },
       "<": {
-        "doc": ""
+        "doc": "",
+        "group": "Decision"
       },
       ">=": {
-        "doc": ""
+        "doc": "",
+        "group": "Decision"
       },
       "<=": {
-        "doc": ""
+        "doc": "",
+        "group": "Decision"
       },
-      "&&": {
-        "doc": ""
+      "all": {
+        "doc": "",
+        "group": "Decision"
       },
-      "||": {
-        "doc": ""
+      "any": {
+        "doc": "",
+        "group": "Decision"
       },
       "!": {
-        "doc": ""
+        "doc": "",
+        "group": "Decision"
       },
       "upcase": {
-        "doc": ""
+        "doc": "",
+        "group": "String"
       },
       "downcase": {
-        "doc": ""
+        "doc": "",
+        "group": "String"
       },
       "concat": {
-        "doc": "Concetenate the given strings."
+        "doc": "Concetenate the given strings.",
+        "group": "String"
       }
     }
   },
@@ -2117,6 +2184,7 @@
     "paint_fill",
     "paint_line",
     "paint_circle",
+    "paint_heatmap",
     "paint_fill-extrusion",
     "paint_symbol",
     "paint_raster",
@@ -2410,7 +2478,6 @@
       "property-function": true,
       "default": 0,
       "minimum": 0,
-      "maximum": 65535,
       "units": "meters",
       "doc": "The height with which to extrude this layer.",
       "transition": true,
@@ -2436,7 +2503,6 @@
       "property-function": true,
       "default": 0,
       "minimum": 0,
-      "maximum": 65535,
       "units": "meters",
       "doc": "The height with which to extrude the base of this layer. Must be less than or equal to `fill-extrusion-height`.",
       "transition": true,
@@ -2960,6 +3026,100 @@
           "ios": "3.5.0",
           "macos": "0.4.0"
         }
+      }
+    }
+  },
+  "paint_heatmap": {
+    "heatmap-radius": {
+      "type": "number",
+      "default": 30,
+      "minimum": 1,
+      "function": "interpolated",
+      "zoom-function": true,
+      "property-function": false,
+      "transition": true,
+      "units": "pixels",
+      "doc": "Radius of influence of one heatmap point in pixels. Increasing the value makes the heatmap smoother, but less detailed.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "0.41.0"
+        },
+        "data-driven styling": {}
+      }
+    },
+    "heatmap-weight": {
+      "type": "number",
+      "default": 1,
+      "minimum": 0,
+      "function": "interpolated",
+      "zoom-function": true,
+      "property-function": true,
+      "transition": false,
+      "doc": "A measure of how much an individual point contributes to the heatmap. A value of 10 would be equivalent to having 10 points of weight 1 in the same spot. Especially useful when combined with clustering.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "0.41.0"
+        },
+        "data-driven styling": {
+          "js": "0.41.0"
+        }
+      }
+    },
+    "heatmap-intensity": {
+      "type": "number",
+      "default": 1,
+      "minimum": 0,
+      "function": "interpolated",
+      "zoom-function": true,
+      "property-function": false,
+      "transition": true,
+      "doc": "Similar to `heatmap-weight` but controls the intensity of the heatmap globally. Primarily used for adjusting the heatmap based on zoom level.",
+      "sdk-support": {
+        "basic functionality": {
+          "js": "0.41.0"
+        },
+        "data-driven styling": {}
+      }
+    },
+    "heatmap-color": {
+      "type": "color",
+      "default": {
+          "stops": [
+              [0, "rgba(0, 0, 255, 0)"],
+              [0.1, "royalblue"],
+              [0.3, "cyan"],
+              [0.5, "lime"],
+              [0.7, "yellow"],
+              [1, "red"]
+          ]
+      },
+      "doc": "Defines the color of each pixel based on its density value in a heatmap. Should be either a stop function with input values ranging from `0` to `1`, or a curve expression with a special `[\"heatmap-density\"]` keyword as the input.",
+      "function": "interpolated",
+      "zoom-function": true,
+      "property-function": false,
+      "transition": true,
+      "sdk-support": {
+        "basic functionality": {
+          "js": "0.41.0"
+        },
+        "data-driven styling": {}
+      }
+    },
+    "heatmap-opacity": {
+      "type": "number",
+      "doc": "The global opacity at which the heatmap layer will be drawn.",
+      "default": 1,
+      "minimum": 0,
+      "maximum": 1,
+      "function": "interpolated",
+      "zoom-function": true,
+      "property-function": false,
+      "transition": true,
+      "sdk-support": {
+        "basic functionality": {
+          "js": "0.41.0"
+        },
+        "data-driven styling": {}
       }
     }
   },

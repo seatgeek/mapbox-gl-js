@@ -1,5 +1,4 @@
 {
-  "expectExpressionType": null,
   "expression": [">", ["boolean", ["get", "x"]], ["boolean", ["get", "y"]]],
   "expected": {
     "compiled": {
@@ -7,7 +6,7 @@
       "errors": [
         {
           "key": "",
-          "error": "Expected arguments of type (Number, Number) | (String, String), but found (Boolean, Boolean) instead."
+          "error": "Expected arguments of type (number, number) | (string, string), but found (boolean, boolean) instead."
         }
       ]
     }

@@ -1,5 +1,4 @@
 {
-  "expectExpressionType": null,
   "expression": ["boolean", ["get", "x"], false],
   "inputs": [
     [{}, {}],
@@ -16,7 +15,7 @@
       "result": "success",
       "isFeatureConstant": false,
       "isZoomConstant": true,
-      "type": "Boolean"
+      "type": "boolean"
     },
     "outputs": [false, true, false, false, false, false, false, false]
   }

@@ -37,8 +37,8 @@ class StyleLayerIndex {
             this._layerConfigs[layerConfig.id] = layerConfig;
 
             const layer = this._layers[layerConfig.id] = StyleLayer.create(layerConfig);
-            layer.updatePaintTransitions({}, {transition: false});
-            layer.filter = featureFilter(layer.filter);
+            layer.updatePaintTransitions({transition: false});
+            layer._featureFilter = featureFilter(layer.filter);
         }
         for (const id of removedIds) {
             delete this._layerConfigs[id];
