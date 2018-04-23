@@ -92,11 +92,11 @@ class DragPanHandler {
         if (this.isActive()) return;
 
         if (e.touches) {
-            window.document.addEventListener('touchmove', this._onMove);
-            window.document.addEventListener('touchend', this._onTouchEnd);
+            DOM.addEventListener(window.document, 'touchmove', this._onMove, {capture: true});
+            DOM.addEventListener(window.document, 'touchend', this._onTouchEnd);
         } else {
-            window.document.addEventListener('mousemove', this._onMove);
-            window.document.addEventListener('mouseup', this._onMouseUp);
+            DOM.addEventListener(window.document, 'mousemove', this._onMove, {capture: true, passive: false});
+            DOM.addEventListener(window.document, 'mouseup', this._onMouseUp);
         }
         /* Deactivate DragPan when the window looses focus. Otherwise if a mouseup occurs when the window isn't in focus, DragPan will still be active even though the mouse is no longer pressed. */
         window.addEventListener('blur', this._onMouseUp);
@@ -183,16 +183,16 @@ class DragPanHandler {
     _onMouseUp(e: MouseEvent | FocusEvent) {
         if (this._ignoreEvent(e)) return;
         this._onUp(e);
-        window.document.removeEventListener('mousemove', this._onMove);
-        window.document.removeEventListener('mouseup', this._onMouseUp);
-        window.removeEventListener('blur', this._onMouseUp);
+        DOM.removeEventListener(window.document, 'mousemove', this._onMove, {capture: true});
+        DOM.removeEventListener(window.document, 'mouseup', this._onMouseUp);
+        DOM.removeEventListener(window, 'blur', this._onMouseUp);
     }
 
     _onTouchEnd(e: TouchEvent) {
         if (this._ignoreEvent(e)) return;
         this._onUp(e);
-        window.document.removeEventListener('touchmove', this._onMove);
-        window.document.removeEventListener('touchend', this._onTouchEnd);
+        DOM.removeEventListener(window.document, 'touchmove', this._onMove, {capture: true, passive: false});
+        DOM.removeEventListener(window.document, 'touchend', this._onTouchEnd);
     }
 
     _fireEvent(type: string, e: Event) {
